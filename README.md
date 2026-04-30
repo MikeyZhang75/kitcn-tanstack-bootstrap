@@ -53,11 +53,10 @@ These are read by `getEnv()` inside Convex functions (`packages/backend/convex/l
 # from packages/backend/
 bunx convex env set DEPLOY_ENV development
 bunx convex env set SITE_URLS "https://web.localhost,https://dashboard.localhost"
-bunx convex env set BETTER_AUTH_SECRET "$(openssl rand -hex 32)"
-bunx convex env set JWKS "<paste output of generated JWKS>"
+bunx kitcn dev --once
 ```
 
-For `JWKS`, follow Better Auth's [JWT plugin docs](https://www.better-auth.com/docs/plugins/jwt) to generate a signing keyset, then paste the JSON string.
+`bunx kitcn dev --once` provisions `BETTER_AUTH_SECRET` and `JWKS` automatically on first run — no manual `openssl` or JWKS generation needed.
 
 ### 4. Configure frontend env files
 
