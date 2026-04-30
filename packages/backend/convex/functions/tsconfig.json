@@ -1,0 +1,5 @@
+{
+	"extends": "@repo/typescript-config/convex.json",
+	"include": ["./**/*", "../lib/**/*", "../shared/**/*"],
+	"exclude": ["node_modules", "./_generated", "**/*.spec.ts", "**/*.test.ts"]
+}

@@ -1,0 +1,28 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"singleQuote": false,
+	"printWidth": 80,
+	"semi": true,
+	"trailingComma": "all",
+	"sortImports": true,
+	"sortTailwindcss": true,
+	"sortPackageJson": true,
+	"ignorePatterns": [
+		"**/dist",
+		"**/.output",
+		"**/.nitro",
+		"**/.tanstack",
+		"**/.wrangler",
+		"**/.turbo",
+		"**/.convex",
+		"**/node_modules",
+		"**/routeTree.gen.ts",
+		"**/_generated",
+		"**/generated",
+		"**/shared/api.ts",
+		"packages/ui/src/components/*.tsx",
+		"packages/ui/src/hooks",
+		"packages/ui/src/lib"
+	]
+}

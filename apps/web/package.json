@@ -1,0 +1,53 @@
+{
+	"name": "@repo/web",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "portless run vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@faker-js/faker": "^10.4.0",
+		"@opentelemetry/api": "1.9.1",
+		"@repo/app-convex": "workspace:*",
+		"@repo/backend": "workspace:*",
+		"@repo/ui": "workspace:*",
+		"@t3-oss/env-core": "^0.13.11",
+		"@tanstack/react-devtools": "^0.10.2",
+		"@tanstack/react-query": "5.100.6",
+		"@tanstack/react-router": "^1.132.0",
+		"@tanstack/react-router-devtools": "^1.132.0",
+		"@tanstack/react-router-ssr-query": "^1.131.7",
+		"@tanstack/react-start": "^1.132.0",
+		"@tanstack/react-table": "^8.21.3",
+		"@tanstack/router-plugin": "^1.132.0",
+		"better-auth": "1.6.9",
+		"convex": "1.36.1",
+		"kitcn": "0.14.2",
+		"lucide-react": "^1.8.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"sonner": "^2.0.7",
+		"superjson": "^2.2.6",
+		"tailwindcss": "^4.0.6",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"@repo/vite-preset": "workspace:*",
+		"@testing-library/dom": "^10.4.0",
+		"@testing-library/react": "^16.2.0",
+		"@types/bun": "latest",
+		"@types/node": "^25.6.0",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
+		"jsdom": "^29.0.0",
+		"typescript": "^5.7.2",
+		"vite": "^8.0.8",
+		"vitest": "^4.1.4"
+	}
+}

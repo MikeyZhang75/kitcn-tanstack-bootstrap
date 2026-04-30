@@ -1,0 +1,34 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": ["import", "typescript", "unicorn", "react"],
+	"options": {
+		"typeAware": true
+	},
+	"ignorePatterns": [
+		"**/dist",
+		"**/.output",
+		"**/.nitro",
+		"**/.tanstack",
+		"**/.wrangler",
+		"**/.turbo",
+		"**/.convex",
+		"**/node_modules",
+		"**/routeTree.gen.ts",
+		"**/_generated",
+		"**/generated",
+		"**/shared/api.ts",
+		"packages/ui/src/components/*.tsx",
+		"packages/ui/src/hooks",
+		"packages/ui/src/lib"
+	],
+	"settings": {
+		"react": {
+			"version": "19"
+		}
+	},
+	"rules": {
+		"typescript/no-explicit-any": "error",
+		"typescript/no-deprecated": "error",
+		"typescript/unbound-method": "off"
+	}
+}

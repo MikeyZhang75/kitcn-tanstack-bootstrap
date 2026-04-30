@@ -1,0 +1,11 @@
+{
+	"extends": "@repo/typescript-config/app.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"paths": {
+			"@repo/app-convex/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx"],
+	"exclude": ["node_modules"]
+}

@@ -1,0 +1,10 @@
+{
+	"extends": "@repo/typescript-config/app.json",
+	"compilerOptions": {
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["**/*.ts", "**/*.tsx", "src/routeTree.gen.ts"],
+	"exclude": ["node_modules", "dist", ".output", ".nitro", ".tanstack"]
+}

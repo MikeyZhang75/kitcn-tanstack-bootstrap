@@ -1,0 +1,28 @@
+{
+	"name": "@repo/backend",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./shared/*": "./convex/shared/*.ts",
+		"./shared/api": "./convex/shared/api.ts"
+	},
+	"scripts": {
+		"dev": "kitcn dev",
+		"codegen": "kitcn codegen",
+		"deploy": "kitcn deploy --yes",
+		"typecheck": "tsc --noEmit --project convex/functions/tsconfig.json"
+	},
+	"dependencies": {
+		"better-auth": "1.6.9",
+		"convex": "1.36.1",
+		"hono": "4.12.16",
+		"kitcn": "0.14.2",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "workspace:*",
+		"@types/bun": "latest",
+		"typescript": "^5.7.2"
+	}
+}
