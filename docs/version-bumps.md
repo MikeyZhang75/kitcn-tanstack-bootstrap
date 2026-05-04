@@ -136,35 +136,43 @@ test plan if the surface area is non-trivial.
 
 ## Completed
 
-| Date       | Package                    | From     | To      | Scope                        | Commit    |
-| ---------- | -------------------------- | -------- | ------- | ---------------------------- | --------- |
-| 2026-04-17 | `convex`                   | 1.33.0   | 1.35.1  | `@repo/web`, `@repo/backend` | `fd8c94d` |
-| 2026-04-17 | `shadcn`                   | 4.2.0    | 4.3.0   | `@repo/web`                  | `9aead35` |
-| 2026-04-17 | `oxlint-tsgolint`          | 0.21.0   | 0.21.1  | root                         | `9aead35` |
-| 2026-04-17 | `@opentelemetry/api`       | 1.9.0    | 1.9.1   | `@repo/web`                  | `b88d364` |
-| 2026-04-17 | `hono`                     | 4.12.9   | 4.12.14 | `@repo/backend`              | `b88d364` |
-| 2026-04-17 | `recharts`                 | 3.8.0    | 3.8.1   | `@repo/web`                  | `b88d364` |
-| 2026-04-17 | `@tanstack/react-query`    | 5.95.2   | 5.99.0  | `@repo/web`                  | `b88d364` |
-| 2026-04-17 | `@tanstack/react-devtools` | 0.7.11   | 0.10.2  | `@repo/web`                  | `b88d364` |
-| 2026-04-17 | `@types/node`              | 22.19.17 | 25.6.0  | `@repo/web`                  | `b88d364` |
-| 2026-04-17 | `jsdom`                    | 27.4.0   | 29.0.2  | `@repo/web`                  | `6435cfa` |
-| 2026-04-17 | `@tanstack/devtools-vite`  | 0.3.12   | 0.6.0   | `@repo/web`                  | `6435cfa` |
-| 2026-04-17 | `vite-tsconfig-paths`      | 5.1.4    | 6.1.1   | `@repo/web`                  | `6435cfa` |
-| 2026-04-17 | `vite`                     | 7.3.2    | 8.0.8   | `@repo/web`                  | `c98100c` |
-| 2026-04-17 | `vitest`                   | 3.2.4    | 4.1.4   | `@repo/web`                  | `c98100c` |
-| 2026-04-17 | `@vitejs/plugin-react`     | 5.2.0    | 6.0.1   | `@repo/web`                  | `c98100c` |
-| 2026-04-18 | `kitcn`                    | 0.12.27  | 0.13.2  | all four workspaces          | `4815fb5` |
-| 2026-04-18 | `better-auth`              | 1.5.3    | 1.6.5   | all four workspaces          | `4815fb5` |
-| 2026-04-20 | `kitcn`                    | 0.13.2   | 0.13.4  | all four workspaces          | `c4f2a66` |
-| 2026-04-30 | `kitcn`                    | 0.13.4   | 0.14.2  | all four workspaces          | `0374c9c` |
-| 2026-04-30 | `convex`                   | 1.35.1   | 1.36.1  | all four workspaces          | `0374c9c` |
-| 2026-04-30 | `better-auth`              | 1.6.5    | 1.6.9   | all four workspaces          | `0374c9c` |
-| 2026-04-30 | `@tanstack/react-query`    | 5.99.0   | 5.100.6 | web, dashboard, app-convex   | `0374c9c` |
-| 2026-04-30 | `hono`                     | 4.12.14  | 4.12.16 | `@repo/backend`              | `0374c9c` |
-| 2026-04-30 | `oxfmt`                    | 0.45.0   | 0.47.0  | root                         | `0374c9c` |
-| 2026-04-30 | `oxlint-tsgolint`          | 0.21.1   | 0.22.1  | root                         | `0374c9c` |
+| Date       | Package                    | From     | To       | Scope                                   | Commit    |
+| ---------- | -------------------------- | -------- | -------- | --------------------------------------- | --------- |
+| 2026-04-17 | `convex`                   | 1.33.0   | 1.35.1   | `@repo/web`, `@repo/backend`            | `fd8c94d` |
+| 2026-04-17 | `shadcn`                   | 4.2.0    | 4.3.0    | `@repo/web`                             | `9aead35` |
+| 2026-04-17 | `oxlint-tsgolint`          | 0.21.0   | 0.21.1   | root                                    | `9aead35` |
+| 2026-04-17 | `@opentelemetry/api`       | 1.9.0    | 1.9.1    | `@repo/web`                             | `b88d364` |
+| 2026-04-17 | `hono`                     | 4.12.9   | 4.12.14  | `@repo/backend`                         | `b88d364` |
+| 2026-04-17 | `recharts`                 | 3.8.0    | 3.8.1    | `@repo/web`                             | `b88d364` |
+| 2026-04-17 | `@tanstack/react-query`    | 5.95.2   | 5.99.0   | `@repo/web`                             | `b88d364` |
+| 2026-04-17 | `@tanstack/react-devtools` | 0.7.11   | 0.10.2   | `@repo/web`                             | `b88d364` |
+| 2026-04-17 | `@types/node`              | 22.19.17 | 25.6.0   | `@repo/web`                             | `b88d364` |
+| 2026-04-17 | `jsdom`                    | 27.4.0   | 29.0.2   | `@repo/web`                             | `6435cfa` |
+| 2026-04-17 | `@tanstack/devtools-vite`  | 0.3.12   | 0.6.0    | `@repo/web`                             | `6435cfa` |
+| 2026-04-17 | `vite-tsconfig-paths`      | 5.1.4    | 6.1.1    | `@repo/web`                             | `6435cfa` |
+| 2026-04-17 | `vite`                     | 7.3.2    | 8.0.8    | `@repo/web`                             | `c98100c` |
+| 2026-04-17 | `vitest`                   | 3.2.4    | 4.1.4    | `@repo/web`                             | `c98100c` |
+| 2026-04-17 | `@vitejs/plugin-react`     | 5.2.0    | 6.0.1    | `@repo/web`                             | `c98100c` |
+| 2026-04-18 | `kitcn`                    | 0.12.27  | 0.13.2   | all four workspaces                     | `4815fb5` |
+| 2026-04-18 | `better-auth`              | 1.5.3    | 1.6.5    | all four workspaces                     | `4815fb5` |
+| 2026-04-20 | `kitcn`                    | 0.13.2   | 0.13.4   | all four workspaces                     | `c4f2a66` |
+| 2026-04-30 | `kitcn`                    | 0.13.4   | 0.14.2   | all four workspaces                     | `0374c9c` |
+| 2026-04-30 | `convex`                   | 1.35.1   | 1.36.1   | all four workspaces                     | `0374c9c` |
+| 2026-04-30 | `better-auth`              | 1.6.5    | 1.6.9    | all four workspaces                     | `0374c9c` |
+| 2026-04-30 | `@tanstack/react-query`    | 5.99.0   | 5.100.6  | web, dashboard, app-convex              | `0374c9c` |
+| 2026-04-30 | `hono`                     | 4.12.14  | 4.12.16  | `@repo/backend`                         | `0374c9c` |
+| 2026-04-30 | `oxfmt`                    | 0.45.0   | 0.47.0   | root                                    | `0374c9c` |
+| 2026-04-30 | `oxlint-tsgolint`          | 0.21.1   | 0.22.1   | root                                    | `0374c9c` |
+| 2026-05-05 | `@tanstack/react-query`    | 5.100.6  | 5.100.9  | web, dashboard, app-convex              | `51f3644` |
+| 2026-05-05 | `@tanstack/react-router`   | 1.168.26 | 1.169.1  | web, dashboard                          | `51f3644` |
+| 2026-05-05 | `@tanstack/react-start`    | 1.167.52 | 1.167.62 | web, dashboard, app-convex, vite-preset | `51f3644` |
+| 2026-05-05 | `@tanstack/router-plugin`  | 1.167.29 | 1.167.32 | web, dashboard                          | `51f3644` |
+| 2026-05-05 | `convex`                   | 1.36.1   | 1.37.0   | all four workspaces                     | `51f3644` |
+| 2026-05-05 | `zod`                      | 4.4.1    | 4.4.3    | web, dashboard, backend                 | `51f3644` |
+| 2026-05-05 | `react-resizable-panels`   | 4.10.0   | 4.11.0   | `@repo/ui`                              | `51f3644` |
+| 2026-05-05 | `turbo`                    | 2.9.6    | 2.9.8    | root                                    | `51f3644` |
 
-## Pending (audit 2026-04-30)
+## Pending (audit 2026-05-05)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
