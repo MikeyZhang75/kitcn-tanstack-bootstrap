@@ -18,13 +18,11 @@ const { createContext, createCaller } = createCallerFactory({
 
 export type ServerCaller = ReturnType<typeof createCaller>;
 
-async function makeContext() {
-	const headers = await getRequestHeaders();
+function makeContext() {
+	const headers = getRequestHeaders();
 	return createContext({ headers });
 }
 
 export function createServerCaller(): ServerCaller {
-	return createCaller(async () => {
-		return await makeContext();
-	});
+	return createCaller(() => makeContext());
 }
