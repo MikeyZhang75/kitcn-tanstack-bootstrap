@@ -7,12 +7,12 @@ A Bun + Turborepo monorepo template for shipping production apps on **TanStack S
 | Layer    | What it uses                                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Runtime  | Bun 1.3.11, Turborepo 2.9                                                                                                         |
-| Frontend | TanStack Start (Vite + Nitro SSR), TanStack Router, TanStack Query                                                                |
+| Frontend | TanStack Start (Vite, SPA mode on Cloudflare Workers), TanStack Router, TanStack Query                                            |
 | Backend  | Convex with [kitcn](https://kitcn.dev) procedure builders + ORM                                                                   |
 | Auth     | Custom session-token user system (scrypt credentials, `localStorage` token, role-gated apps)                                      |
 | UI       | shadcn (base-ui variant) under `@repo/ui`                                                                                         |
 | Tooling  | [oxc](https://oxc.rs) (`oxfmt` + `oxlint --type-aware`), [portless](https://github.com/nicepkg/portless) named-localhost dev URLs |
-| Deploy   | Cloudflare Pages (per-app `wrangler.local.toml`)                                                                                  |
+| Deploy   | Cloudflare Workers via `@cloudflare/vite-plugin` (per-app `wrangler.jsonc`)                                                       |
 
 Two apps share the backend:
 
@@ -24,7 +24,7 @@ Two apps share the backend:
 - [Bun](https://bun.sh) ≥ 1.3.11 (required — `packageManager` is pinned)
 - [portless](https://github.com/nicepkg/portless) — `npm i -g portless`
 - A [Convex](https://convex.dev) account
-- (production) A [Cloudflare Pages](https://pages.cloudflare.com) account, `wrangler` CLI
+- (production) A [Cloudflare Workers](https://workers.cloudflare.com) account (`wrangler` is bundled as a dependency)
 
 ## Setup
 
@@ -152,7 +152,7 @@ First-party wrappers (DataTable, LoadingButton, NavUser) live under `@repo/ui/co
 CI deploys on push to `main` (when the workflow is wired up):
 
 1. Convex via `kitcn deploy`.
-2. Both apps to Cloudflare Pages — one `wrangler-action` step per `apps/web/wrangler.local.toml` and `apps/dashboard/wrangler.local.toml`.
+2. Both apps to Cloudflare Workers — each app's `deploy` script runs `vite build && wrangler deploy`, reading `apps/web/wrangler.jsonc` / `apps/dashboard/wrangler.jsonc`.
 
 Each app is built with its own `VITE_SITE_URL` (its public origin, validated in `src/env.ts`):
 
