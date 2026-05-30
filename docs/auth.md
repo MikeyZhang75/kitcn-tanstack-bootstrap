@@ -19,23 +19,22 @@ plumbing. Two consequences:
   Convex-native channel for an opaque token, so every authenticated procedure
   receives `sessionToken` in its input and validates it against the `session`
   table. The cRPC builders merge this field in automatically (below).
-- **`ssr: false` on every layout (the whole app renders on the client).**
+- **SPA mode + `ssr: false` fallback (the whole app renders on the client).**
   localStorage doesn't exist during SSR, so the route gate can't run
-  server-side. Both layout groups — `_authenticated` **and** `_public` — set
-  `ssr: false` in both apps, so every route's `beforeLoad`/`loader`/component
-  runs on the client (the Nitro worker still SSRs the bare document shell per
-  request). This makes the whole app a SPA: the `_authenticated` gate and the
-  `/auth` "bounce already-signed-in visitors" check both read localStorage in
-  `beforeLoad` on hard loads, not just in-app navigation. (Full TanStack Start
-  **`spa` mode** — `tanstackStart({ spa: { enabled: true } })` — was tried and
-  rejected: it force-enables a build-time shell prerender that boots
-  `npx wrangler pages dev` (the `cloudflare-pages` Nitro preset's preview
-  command) to render `/_shell.html`. That needs workerd and **fails the build**
-  in CI / the sandbox — verified. Getting real `spa` mode would mean migrating
-  the deploy off Cloudflare Pages to Cloudflare **Workers** via
-  `@cloudflare/vite-plugin`, where the shell prerender runs in-process. Per-route
-  `ssr: false` gives the same whole-app client rendering with no prerender step
-  and an unchanged Cloudflare Pages deploy.)
+  server-side. Both apps enable TanStack Start **`spa` mode** via
+  `tanstackStart({ spa: { enabled: true } })` in `@repo/vite-preset`, so every
+  route renders on the client. ⚠️ **Build caveat:** `spa` mode force-enables a
+  build-time shell prerender (root route → `/_shell.html`) that runs the
+  `cloudflare-pages` Nitro preset's preview command, `npx wrangler pages dev` —
+  so the build needs a working wrangler/workerd and **fails where it can't
+  boot** (e.g. a CI runner / sandbox without it). If that bites, the clean fix
+  is migrating the deploy off Cloudflare Pages to Cloudflare **Workers** via
+  `@cloudflare/vite-plugin`, where the shell prerender runs in-process. Both
+  layouts (`_authenticated` **and** `_public`) also set `ssr: false` as a
+  fallback: drop the `spa` flag and the app still renders client-side with no
+  prerender (the Nitro worker SSRs only the bare document shell), with the
+  `_authenticated` gate and the `/auth` "bounce already-signed-in visitors"
+  check reading localStorage in `beforeLoad` on hard loads.
 
 #### Storage model
 

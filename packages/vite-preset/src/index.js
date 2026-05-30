@@ -11,7 +11,16 @@ export function createAppConfig() {
 			devtools({ eventBusConfig: { port: 0 } }),
 			nitro({ preset: "cloudflare-pages" }),
 			tailwindcss(),
-			tanstackStart(),
+			// SPA mode: render the whole app on the client and prerender a static
+			// shell to `/_shell.html`. ⚠️ Build caveat: that prerender runs the
+			// `cloudflare-pages` preset's preview command (`npx wrangler pages dev`),
+			// so the build needs a working wrangler/workerd and FAILS where it can't
+			// boot (e.g. a CI runner / sandbox without it). The clean fix if that
+			// bites is migrating the deploy to Cloudflare Workers via
+			// `@cloudflare/vite-plugin` (prerender runs in-process). Per-route
+			// `ssr: false` on both layouts is kept as a fallback: drop this flag and
+			// the app still renders client-side with no prerender.
+			tanstackStart({ spa: { enabled: true } }),
 			viteReact(),
 		],
 		resolve: {
