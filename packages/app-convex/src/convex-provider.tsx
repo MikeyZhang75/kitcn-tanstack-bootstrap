@@ -2,6 +2,7 @@
 
 import { QueryClientProvider as TanstackQueryClientProvider } from "@tanstack/react-query";
 import {
+	ConvexProvider,
 	ConvexReactClient,
 	getConvexQueryClientSingleton,
 	getQueryClientSingleton,
@@ -24,11 +25,22 @@ export function AppConvexProvider({ children }: { children: ReactNode }) {
 		queryClient,
 	});
 
+	// `ConvexProvider` supplies the bare Convex React context (`useConvex()`).
+	// kitcn's cRPC `mutationOptions()` resolve through `useConvexMutation` from
+	// `convex/react`, which reads that context — without this provider every
+	// authed/public mutation (e.g. `session.signIn`) throws "Could not find
+	// Convex client". Previously `ConvexAuthProvider` (Better Auth) supplied it;
+	// with Better Auth gone we mount the plain provider, no auth attached.
 	return (
-		<TanstackQueryClientProvider client={queryClient}>
-			<CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
-				{children}
-			</CRPCProvider>
-		</TanstackQueryClientProvider>
+		<ConvexProvider client={convex}>
+			<TanstackQueryClientProvider client={queryClient}>
+				<CRPCProvider
+					convexClient={convex}
+					convexQueryClient={convexQueryClient}
+				>
+					{children}
+				</CRPCProvider>
+			</TanstackQueryClientProvider>
+		</ConvexProvider>
 	);
 }
