@@ -1,41 +1,25 @@
 "use client";
 
 import { QueryClientProvider as TanstackQueryClientProvider } from "@tanstack/react-query";
-import { ConvexAuthProvider } from "kitcn/auth/client";
 import {
 	ConvexReactClient,
 	getConvexQueryClientSingleton,
 	getQueryClientSingleton,
-	useAuthStore,
 } from "kitcn/react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { CRPCProvider } from "./crpc";
 import { createQueryClient } from "./query-client";
 
-type AuthClient = ComponentProps<typeof ConvexAuthProvider>["authClient"];
-
+// No Better Auth bridge. Identity is carried by the session token in each
+// authenticated procedure's input, so the Convex client attaches no auth and
+// needs no auth store — `getConvexQueryClientSingleton` takes `authStore?` as
+// optional, and we simply omit it.
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-export function AppConvexProvider({
-	authClient,
-	children,
-}: {
-	authClient: AuthClient;
-	children: ReactNode;
-}) {
-	return (
-		<ConvexAuthProvider authClient={authClient} client={convex}>
-			<QueryProvider>{children}</QueryProvider>
-		</ConvexAuthProvider>
-	);
-}
-
-function QueryProvider({ children }: { children: ReactNode }) {
-	const authStore = useAuthStore();
+export function AppConvexProvider({ children }: { children: ReactNode }) {
 	const queryClient = getQueryClientSingleton(createQueryClient);
 	const convexQueryClient = getConvexQueryClientSingleton({
-		authStore,
 		convex,
 		queryClient,
 	});

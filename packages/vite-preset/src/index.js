@@ -20,7 +20,6 @@ export function createAppConfig() {
 		optimizeDeps: {
 			include: [
 				"@tanstack/react-query",
-				"better-auth/react",
 				"convex/browser",
 				"convex/react",
 				"superjson",

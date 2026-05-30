@@ -14,8 +14,7 @@
 		"typecheck": "tsc --noEmit --project convex/functions/tsconfig.json"
 	},
 	"dependencies": {
-		"@better-auth/i18n": "^1.6.9",
-		"better-auth": "1.6.9",
+		"@noble/hashes": "2.2.0",
 		"convex": "1.37.0",
 		"hono": "4.12.16",
 		"kitcn": "0.14.2",

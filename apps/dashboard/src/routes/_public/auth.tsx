@@ -1,7 +1,8 @@
 "use client";
 
-import { fetchSessionClaims } from "@repo/app-convex/auth-guard";
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { getSessionToken } from "@repo/app-convex/session-store";
+import { useSignIn } from "@repo/app-convex/use-auth";
 import {
 	PASSWORD_MIN_LENGTH,
 	USERNAME_MAX_LENGTH,
@@ -19,12 +20,9 @@ import {
 import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
 import { Field, FieldGroup, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type SyntheticEvent, useReducer } from "react";
 import { toast } from "sonner";
-
-import { authClient } from "@/lib/convex/auth-client";
 
 type AuthSearch = {
 	callbackUrl?: string;
@@ -61,16 +59,13 @@ export const Route = createFileRoute("/_public/auth")({
 		callbackUrl:
 			typeof search.callbackUrl === "string" ? search.callbackUrl : undefined,
 	}),
-	beforeLoad: async () => {
-		// Already-signed-in visitors have nothing to do on the login form.
-		// Bounce them home; the _authenticated layout then handles the role
-		// check (and may still end up redirecting to /access-denied).
-		//
-		// Uses the same server-authoritative JWT read as `_authenticated` —
-		// one source of truth for "is this user signed in?", no reliance on
-		// client-side in-memory state.
-		const claims = await fetchSessionClaims();
-		if (claims) {
+	beforeLoad: () => {
+		// Already-signed-in visitors (token present) have nothing to do on the
+		// login form — bounce them home; the _authenticated gate then validates
+		// the role. SPA mode runs beforeLoad on the client, so localStorage is
+		// available. A stale token resolves to /auth in at most one bounce
+		// (the authed gate clears it).
+		if (getSessionToken() != null) {
 			throw redirect({ to: "/" });
 		}
 	},
@@ -82,11 +77,11 @@ function AuthPage() {
 	const [form, dispatchForm] = useReducer(authFormReducer, initialAuthForm);
 	const { username, password } = form;
 
+	const signIn = useSignIn();
+
 	const onAuthSuccess = () => {
-		// Full page navigation so the router rebuilds with the fresh
-		// session cookie and re-runs every beforeLoad against it.
-		// Avoids the race where useNavigate() evaluates _authenticated's
-		// beforeLoad before document.cookie has been updated.
+		// Full-page navigation so the router rebuilds from scratch and re-runs
+		// every beforeLoad with the freshly stored token in localStorage.
 		window.location.assign(callbackUrl ?? "/");
 	};
 
@@ -94,19 +89,12 @@ function AuthPage() {
 		toast.error(extractErrorMessage(error) ?? "出现错误");
 	};
 
-	const signIn = useMutation({
-		mutationFn: async (variables: { username: string; password: string }) => {
-			const { data, error } = await authClient.signIn.username(variables);
-			if (error) throw error;
-			return data;
-		},
-		onSuccess: onAuthSuccess,
-		onError: notifyError,
-	});
-
 	function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		signIn.mutate({ username, password });
+		signIn.mutate(
+			{ username, password },
+			{ onSuccess: onAuthSuccess, onError: notifyError },
+		);
 	}
 
 	return (

@@ -1,6 +1,8 @@
 "use client";
 
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { useSignOut } from "@repo/app-convex/use-auth";
+import { useSession } from "@repo/app-convex/use-session";
 import { NavUser } from "@repo/ui/components/custom-ui/nav-user";
 import {
 	Sidebar,
@@ -14,46 +16,31 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@repo/ui/components/sidebar";
-import { useMutation } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { CreditCardIcon, LayoutDashboardIcon } from "lucide-react";
 import { toast } from "sonner";
-
-import {
-	authClient,
-	useSignOutMutationOptions,
-} from "@/lib/convex/auth-client";
 
 const navItems = [
 	{ title: "仪表盘", to: "/", icon: LayoutDashboardIcon },
 ] as const;
 
 function AppNavUser() {
-	const { data: session, isPending } = authClient.useSession();
-	const signOut = useMutation(
-		useSignOutMutationOptions({
-			onSuccess: () => {
-				window.location.assign("/auth");
-			},
-			onError: (error) => {
-				toast.error(extractErrorMessage(error) ?? "退出登录失败");
-			},
-		}),
-	);
-	const sessionUser = session?.user;
-	const user = sessionUser
-		? {
-				displayName: sessionUser.displayUsername || sessionUser.username || "",
-				image: sessionUser.image,
-			}
-		: null;
+	const { user, isPending } = useSession();
+	const signOut = useSignOut();
+	const navUser = user ? { displayName: user.name || user.username } : null;
 
 	return (
 		<NavUser
 			isLoading={isPending}
 			isSigningOut={signOut.isPending}
-			onSignOut={() => signOut.mutate(undefined)}
-			user={user}
+			onSignOut={() =>
+				signOut.mutate(undefined, {
+					onSuccess: () => window.location.assign("/auth"),
+					onError: (error) =>
+						toast.error(extractErrorMessage(error) ?? "退出登录失败"),
+				})
+			}
+			user={navUser}
 		/>
 	);
 }

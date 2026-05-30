@@ -11,10 +11,15 @@ import type { tables } from "../functions/schema";
 
 export const api = {
   invitations: {
-    count: createApiLeaf<"query", typeof import("../functions/invitations").count>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/invitations").count>("invitations:count"), { auth: "required", type: "query" }),
-    create: createApiLeaf<"mutation", typeof import("../functions/invitations").create>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").create>("invitations:create"), { auth: "required", type: "mutation" }),
-    list: createApiLeaf<"query", typeof import("../functions/invitations").list>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/invitations").list>("invitations:list"), { auth: "required", type: "query" }),
-    revoke: createApiLeaf<"mutation", typeof import("../functions/invitations").revoke>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").revoke>("invitations:revoke"), { auth: "required", type: "mutation" }),
+    count: createApiLeaf<"query", typeof import("../functions/invitations").count>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/invitations").count>("invitations:count"), { type: "query" }),
+    create: createApiLeaf<"mutation", typeof import("../functions/invitations").create>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").create>("invitations:create"), { type: "mutation" }),
+    list: createApiLeaf<"query", typeof import("../functions/invitations").list>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/invitations").list>("invitations:list"), { type: "query" }),
+    revoke: createApiLeaf<"mutation", typeof import("../functions/invitations").revoke>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").revoke>("invitations:revoke"), { type: "mutation" }),
+  },
+  session: {
+    me: createApiLeaf<"query", typeof import("../functions/session").me>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/session").me>("session:me"), { type: "query" }),
+    signIn: createApiLeaf<"mutation", typeof import("../functions/session").signIn>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signIn>("session:signIn"), { type: "mutation" }),
+    signOut: createApiLeaf<"mutation", typeof import("../functions/session").signOut>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signOut>("session:signOut"), { type: "mutation" }),
   },
   signup: {
     signUpWithInvitation: createApiLeaf<"mutation", typeof import("../functions/signup").signUpWithInvitation>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/signup").signUpWithInvitation>("signup:signUpWithInvitation"), { type: "mutation" }),

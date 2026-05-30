@@ -1,5 +1,6 @@
 "use client";
 
+import { useSignOut } from "@repo/app-convex/use-auth";
 import {
 	Card,
 	CardContent,
@@ -8,24 +9,15 @@ import {
 	CardTitle,
 } from "@repo/ui/components/card";
 import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
-import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldAlertIcon } from "lucide-react";
-
-import { useSignOutMutationOptions } from "@/lib/convex/auth-client";
 
 export const Route = createFileRoute("/_public/access-denied")({
 	component: AccessDeniedPage,
 });
 
 function AccessDeniedPage() {
-	const signOut = useMutation(
-		useSignOutMutationOptions({
-			onSuccess: () => {
-				window.location.assign("/auth");
-			},
-		}),
-	);
+	const signOut = useSignOut();
 
 	return (
 		<main className="flex min-h-svh items-center justify-center px-6 py-16">
@@ -42,7 +34,11 @@ function AccessDeniedPage() {
 						className="w-full"
 						loading={signOut.isPending}
 						loadingText="退出中…"
-						onClick={() => signOut.mutate(undefined)}
+						onClick={() =>
+							signOut.mutate(undefined, {
+								onSuccess: () => window.location.assign("/auth"),
+							})
+						}
 						type="button"
 					>
 						退出登录

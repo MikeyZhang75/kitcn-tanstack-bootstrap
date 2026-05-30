@@ -27,9 +27,8 @@ async function resolveUsernames(
 		}),
 	);
 	for (const user of users) {
-		// `username` is the canonical handle (lowercased, set by the Better
-		// Auth username plugin on every signup). Users without it are legacy
-		// pre-plugin rows and won't appear in the output map.
+		// `username` is the canonical handle (lowercased on signup) and is a
+		// required column, so it's always present — the guard is belt-and-braces.
 		if (user.username) {
 			result.set(user.id, user.username);
 		}

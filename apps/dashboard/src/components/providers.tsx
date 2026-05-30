@@ -8,11 +8,9 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { authClient } from "@/lib/convex/auth-client";
-
 export function Providers({ children }: { children: ReactNode }) {
 	return (
-		<AppConvexProvider authClient={authClient}>
+		<AppConvexProvider>
 			{children}
 			<Toaster
 				position="top-center"

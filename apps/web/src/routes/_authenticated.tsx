@@ -1,40 +1,70 @@
-import { fetchSessionClaims } from "@repo/app-convex/auth-guard";
+import {
+	clearSessionToken,
+	getSessionToken,
+} from "@repo/app-convex/session-store";
+import { useSession } from "@repo/app-convex/use-session";
 import { Separator } from "@repo/ui/components/separator";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@repo/ui/components/sidebar";
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { Spinner } from "@repo/ui/components/spinner";
+import {
+	createFileRoute,
+	Navigate,
+	Outlet,
+	redirect,
+} from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 
 export const Route = createFileRoute("/_authenticated")({
-	// `shouldReload: true` forces beforeLoad to re-run on every route
-	// match — including sibling client navigations within `_authenticated`
-	// (e.g. `/` → `/some-sibling`), not just fresh entries. Combined with
-	// `fetchSessionClaims` (a server function), each navigation round-trips
-	// to the server which parses the httpOnly cookie fresh.
-	// Cost: 1 RTT per client nav; 0 RTT on SSR (handler runs inline).
-	shouldReload: true,
-	beforeLoad: async ({ location }) => {
-		const claims = await fetchSessionClaims();
-
-		if (!claims) {
-			throw redirect({
-				to: "/auth",
-				search: { callbackUrl: location.href },
-			});
-		}
-
-		if (claims.role !== "user") {
-			throw redirect({ to: "/access-denied" });
+	// Client-only: the entire authenticated app renders on the client (no SSR
+	// pass) so the gate can read the session token from localStorage. Public
+	// routes (/auth, /access-denied) still SSR normally.
+	ssr: false,
+	// Cheap, flash-free gate for the signed-out case — beforeLoad runs on the
+	// client, so localStorage is available. This only checks token presence;
+	// the authoritative role check happens in the component once `session.me`
+	// resolves (a token can be stale/expired/revoked).
+	beforeLoad: ({ location }) => {
+		if (getSessionToken() == null) {
+			throw redirect({ to: "/auth", search: { callbackUrl: location.href } });
 		}
 	},
 	component: AuthenticatedLayout,
 });
 
 function AuthenticatedLayout() {
+	const { sessionToken, user, isPending } = useSession();
+
+	useEffect(() => {
+		// Token present but `me` resolved to no user → it's stale/expired/revoked.
+		// Clear it so the redirect to /auth doesn't bounce straight back here.
+		if (sessionToken != null && !isPending && user == null) {
+			clearSessionToken();
+		}
+	}, [sessionToken, isPending, user]);
+
+	if (sessionToken == null) {
+		return <Navigate to="/auth" />;
+	}
+	if (isPending) {
+		return (
+			<div className="flex min-h-svh items-center justify-center">
+				<Spinner className="size-6" />
+			</div>
+		);
+	}
+	if (user == null) {
+		return <Navigate to="/auth" />;
+	}
+	if (user.role !== "user") {
+		return <Navigate to="/access-denied" />;
+	}
+
 	return (
 		<SidebarProvider className="h-svh overflow-hidden">
 			<AppSidebar />

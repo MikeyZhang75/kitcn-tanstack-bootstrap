@@ -34,9 +34,10 @@ const ormSchema = schema;
 
 registerProcedureNameLookup(
   {
-  "invitations.ts": [{ column: 51, line: 99, name: "invitations:count" }, { column: 2, line: 136, name: "invitations:create" }, { column: 2, line: 47, name: "invitations:list" }, { column: 2, line: 193, name: "invitations:revoke" }],
-  "signup.ts": [{ column: 2, line: 17, name: "signup:signUpWithInvitation" }],
-  "users.ts": [{ column: 2, line: 28, name: "users:bootstrapAdmin" }],
+  "invitations.ts": [{ column: 51, line: 98, name: "invitations:count" }, { column: 2, line: 135, name: "invitations:create" }, { column: 2, line: 46, name: "invitations:list" }, { column: 2, line: 192, name: "invitations:revoke" }],
+  "session.ts": [{ column: 49, line: 69, name: "session:me" }, { column: 2, line: 20, name: "session:signIn" }, { column: 2, line: 59, name: "session:signOut" }],
+  "signup.ts": [{ column: 2, line: 24, name: "signup:signUpWithInvitation" }],
+  "users.ts": [{ column: 2, line: 20, name: "users:bootstrapAdmin" }],
 },
   "convex/functions"
 );

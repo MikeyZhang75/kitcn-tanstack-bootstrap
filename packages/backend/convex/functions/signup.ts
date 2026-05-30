@@ -1,22 +1,30 @@
 import { eq } from "kitcn/orm";
 
 import { publicMutation } from "../lib/crpc";
+import { hashPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
+import { generateSessionToken } from "../lib/session-token";
+import { SESSION_TTL_MS } from "../shared/tables/session";
 import { signUpWithInvitationInputSchema } from "../shared/tables/user";
 import type { Id } from "./_generated/dataModel";
-import { getAuth } from "./generated/auth";
-import { invitationsTable } from "./schema";
+import {
+	credentialsTable,
+	invitationsTable,
+	sessionTable,
+	userTable,
+} from "./schema";
 
-// Synthetic email domain used when the product only wants username-based
-// signup. Better Auth's signUpEmail still requires a unique email, so we
-// derive one from the username. Keep this in sync with the auth form copy.
-const DERIVED_EMAIL_DOMAIN = "example.com";
-
+// Invitation-gated signup. One transactional mutation: validate the invitation,
+// create the user + credential, consume the invitation, and mint a session —
+// then return the token so the client is signed in immediately (no separate
+// sign-in round trip). All of this is atomic; if any step throws, nothing is
+// written (the invitation is not consumed).
 export const signUpWithInvitation = publicMutation
 	.input(signUpWithInvitationInputSchema)
 	.mutation(async ({ ctx, input }) => {
 		const invitation = await ctx.orm.query.invitations.findFirst({
 			where: { code: input.invitationCode },
+			columns: { id: true, status: true },
 		});
 		if (!invitation) {
 			throw error("BAD_REQUEST", "邀请码无效");
@@ -28,48 +36,43 @@ export const signUpWithInvitation = publicMutation
 			throw error("BAD_REQUEST", "邀请码已撤销");
 		}
 
-		// Username has already been validated to `[a-zA-Z0-9_]+`, so interpolating
-		// it directly into an email address is safe. Lowercased to align with the
-		// username plugin's default normalization — keeps the email's local-part
-		// matching the canonical `user.username` value stored in the DB.
-		const derivedEmail = `${input.username.toLowerCase()}@${DERIVED_EMAIL_DOMAIN}`;
-
-		const auth = getAuth(ctx);
-		let result: Awaited<ReturnType<typeof auth.api.signUpEmail>>;
-		try {
-			result = await auth.api.signUpEmail({
-				body: {
-					email: derivedEmail,
-					password: input.password,
-					// `name` is required by Better Auth's signUpEmail body and by
-					// the user table (notNull). Reuse the username verbatim so
-					// nav-user.tsx has something to render.
-					name: input.username,
-					username: input.username,
-				},
-			});
-		} catch (e) {
-			// Better Auth's error messages are English and leak internal
-			// validation/version details — echoing them verbatim enables username
-			// enumeration (registered vs unregistered usernames return different
-			// text) and version fingerprinting. Log server-side for debugging,
-			// return a generic Simplified Chinese message to the client.
-			console.error("signUpEmail failed:", e);
-			throw error("BAD_REQUEST", "创建用户失败，请检查用户名或密码");
+		// Lowercase the canonical handle (case-insensitive login); keep the
+		// original-cased input as the display `name`.
+		const username = input.username.toLowerCase();
+		const existing = await ctx.orm.query.user.findFirst({
+			where: { username },
+			columns: { id: true },
+		});
+		if (existing) {
+			throw error("CONFLICT", "用户名已被使用，请更换");
 		}
 
-		if (!result?.user) {
+		const passwordHash = hashPassword(input.password);
+
+		const [user] = await ctx.orm
+			.insert(userTable)
+			.values({ username, name: input.username, role: "user" })
+			.returning();
+		if (!user) {
 			throw error("INTERNAL_SERVER_ERROR", "创建用户失败");
 		}
+		// kitcn surfaces a row's `id` as `string`; FK columns are branded
+		// `Id<"user">`. Brand once and reuse (matches the repo convention).
+		const userId = user.id as Id<"user">;
+
+		await ctx.orm.insert(credentialsTable).values({ userId, passwordHash });
 
 		await ctx.orm
 			.update(invitationsTable)
-			.set({
-				status: "used",
-				usedAt: new Date(),
-				usedBy: result.user.id as Id<"user">,
-			})
+			.set({ status: "used", usedAt: new Date(), usedBy: userId })
 			.where(eq(invitationsTable.id, invitation.id));
 
-		return ok({ userId: result.user.id });
+		const sessionToken = generateSessionToken();
+		await ctx.orm.insert(sessionTable).values({
+			token: sessionToken,
+			userId,
+			expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+		});
+
+		return ok({ sessionToken });
 	});

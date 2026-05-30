@@ -1,20 +1,145 @@
-### Auth flow (Better Auth + kitcn)
+### Auth flow (custom session tokens — no Better Auth, no JWT)
 
-- Server plugin lives in `packages/backend/convex/functions/auth.ts` / `auth.config.ts`. kitcn's `authMiddleware(getAuth)` is mounted on the Convex HTTP router in `functions/http.ts`.
-- The web app proxies Better Auth through a catch-all route: `apps/web/src/routes/api/auth/$.ts` → `handler(request)` from `@repo/app-convex/auth-server` (shared across both apps via the `packages/app-convex` workspace).
-- Client helpers: `@/lib/convex/auth-client.ts` is the **one file deliberately kept per-app** because the two apps expose different Better Auth mutation hooks — `apps/web` exports `authClient`, `useSignInMutationOptions`, `useSignOutMutationOptions`, and `useSignUpMutationOptions`; `apps/dashboard` exports only `authClient` and `useSignOutMutationOptions` (admin accounts can't self-sign-up).
-- Signup is gated by invitation codes — the page calls `crpc.signup.signUpWithInvitation` first (validates + creates user via Better Auth, but no HTTP ctx so no cookies), then immediately calls `authClient.signIn.email(...)` to establish the session. See `apps/web/src/routes/_public/auth.tsx`.
-- After auth success: **full page navigation** with `window.location.assign(...)` rather than `useNavigate()`, because TanStack Router's `beforeLoad` can run before `document.cookie` is updated and bounce the user back to `/auth`.
+This project runs its **own** user system. There is no Better Auth, no
+`@convex-dev/better-auth`, no JWT, and no JWKS. Identity is a single opaque
+**session token** the client holds in `localStorage` and sends to the backend
+as a procedure argument. kitcn's auth runtime is intentionally **disabled** (no
+`convex/functions/auth.ts`), so `generated/auth.ts` is the `createDisabledAuthRuntime`
+stub — never call `getAuth`/`auth.*`.
 
-#### User role and the JWT `role` claim
+#### Why session tokens (and why the authenticated app is client-rendered)
 
-- The `user` table has a required `role: textEnum(USER_ROLES)` column. `USER_ROLES`, `UserRole`, and the `isUserRole` type guard live in `packages/backend/convex/shared/tables/user.ts` — this is the single source of truth shared across the backend (`schema.ts`, `crpc.ts`) and the frontend (imported via `@repo/backend/shared/tables/user`). `auth.ts` declares the role via `user.additionalFields.role` **and** extends the convex plugin's `jwt.definePayload` so every issued Better Auth JWT carries `role`.
-- New user rows get `role: "user"` written by Better Auth itself. `additionalFields.role` declares `defaultValue: "user"` with `input: false`, and Better Auth's `parseInputData` applies that default on every `signUpEmail` create, so the insert satisfies the hardened `role: textEnum(USER_ROLES).notNull()` schema without a follow-up write from `signup.signUpWithInvitation`.
-- Each frontend app accepts **exactly one role**: `apps/web` allows only `role === "user"`, `apps/dashboard` allows only `role === "admin"`. Every other role (including any future ones) lands on `/access-denied`. Separating by app — rather than role-branching inside a single app — keeps each codebase's `_authenticated` subtree scoped to a single audience: route code never has to do `if (role === "admin") ...` forks, and removing a feature from one app can't accidentally expose it in the other.
+The goal was a client-side app that keeps its credential in `localStorage`
+(not an httpOnly cookie), so auth no longer depends on SSR/HTTP cookie
+plumbing. Two consequences:
+
+- **Token as a procedure argument.** Convex authenticates real-time
+  WS queries/mutations _only_ via `ctx.auth.getUserIdentity()`, which requires
+  a JWT verified against a configured provider. With no JWT there is no
+  Convex-native channel for an opaque token, so every authenticated procedure
+  receives `sessionToken` in its input and validates it against the `session`
+  table. The cRPC builders merge this field in automatically (below).
+- **`ssr: false` on `_authenticated`.** localStorage doesn't exist during SSR,
+  so the route gate can't run server-side. The entire authenticated subtree is
+  marked `ssr: false` (client-only render) in both apps; the public `/auth` and
+  `/access-denied` routes still SSR normally. (Full TanStack Start `spa` mode
+  was avoided: its prerender step boots a `wrangler pages dev` preview server,
+  which is fragile in CI and unbuildable in the sandbox. `ssr: false` gives the
+  same client-side rendering where it's needed with no prerender step and an
+  unchanged Cloudflare Pages SSR deploy.)
+
+#### Storage model
+
+Four tables in `schema.ts` (all plain app tables — kitcn manages none of them):
+
+- `user` — `username` (unique, lowercased login handle), `name` (display), `role`.
+- `credentials` — `userId` (unique FK → user), `passwordHash`. Kept separate
+  from `user` so user projections never carry the hash.
+- `session` — `token` (unique, 64 hex chars), `userId` (FK → user), `expiresAt`.
+  The row's existence + `expiresAt` is the source of truth; there is nothing to
+  cryptographically verify.
+- `invitations` — unchanged (see [feature-invitations](feature-invitations.md)).
+
+Password hashing lives in `convex/lib/password.ts`: **scrypt via
+`@noble/hashes`** (pure JS, runs in the Convex V8 isolate), salt from
+`crypto.getRandomValues`, stored as a self-describing PHC-style string
+(`scrypt$N$r$p$saltHex$hashHex`). Both the salt and the session token
+(`convex/lib/session-token.ts`) come from `crypto.getRandomValues`, which is
+available and deterministically seeded in the Convex runtime — so hashing and
+token minting run **inline in mutations**, no action hop. `verifyPassword`
+reads the parameters back from the stored string (so raising `N` only affects
+new hashes) and compares in constant time.
+
+#### Procedures
+
+- `convex/functions/session.ts`:
+  - `signIn` (`publicMutation`, input `signInInputSchema`) — find user by
+    lowercased username, verify password, mint a session row, return
+    `ok({ sessionToken })`. A single generic `用户名或密码错误` on any failure.
+  - `signOut` (`publicMutation`, input `signOutInputSchema`) — delete the
+    session row by token; idempotent.
+  - `me` (`authQuery.requires(USER_ROLES)`) — returns `ok({ user })` for the
+    current identity. The **only** place the frontend asks the backend "who am
+    I", used by the route gate + sidebar user menu.
+- `convex/functions/signup.ts` — `signUpWithInvitation` (`publicMutation`):
+  one atomic transaction validates the invitation, creates the user +
+  credential, consumes the invitation, mints a session, and returns
+  `ok({ sessionToken })`. The client is signed in immediately — no separate
+  sign-in round trip.
+- `convex/functions/users.ts` — `bootstrapAdmin` (`privateMutation`), cold-start
+  (below).
+
+#### Authorization (cRPC builders)
+
+`convex/lib/crpc.ts` is the sole authorization model. `authQuery.requires([...])`
+/ `authMutation.requires([...])` each `.input(z.object({ sessionToken }))` (so
+Convex's strict arg validator accepts the token) then `.use(...)` middleware
+calls `resolveSessionUser`: look the token up in `session`, reject if
+missing/expired (`UNAUTHORIZED`), load the user, enforce the allowed roles
+(`FORBIDDEN`), and inject `ctx.user` (`{ id, username, name, role }` — there is
+no `ctx.userId`, use `ctx.user.id`). All reads, no `ctx.auth`. The roles tuple
+is typed `readonly [UserRole, ...UserRole[]]` so `.requires([])` is a compile
+error, and forgetting `.requires(...)` is too (`authMutation` has only
+`.requires`, not `.input`).
+
+`publicQuery`/`publicMutation`/`publicAction`, `privateQuery`/`privateMutation`/
+`privateAction` (`.internal()`), and `publicRoute` (HTTP) round out the set.
+There is **no `authAction`/`authRoute`** — authenticated HTTP/action procedures
+aren't supported in the session-token model (a WS query/mutation reads the
+token from its input; an HTTP route would have to parse it from a header and
+resolve the session via an internal caller). Nothing needs that today.
+
+`USER_ROLES`, `UserRole`, and the input schemas (`signInInputSchema`,
+`signUpWithInvitationInputSchema`, `bootstrapAdminInputSchema`) live in
+`packages/backend/convex/shared/tables/user.ts`; session constants
+(`SESSION_TTL_MS`, `sessionTokenSchema`, `signOutInputSchema`) in
+`shared/tables/session.ts`. Both are imported directly by the frontend.
+
+#### Frontend (shared `packages/app-convex`)
+
+- `session-store.ts` — `getSessionToken` / `setSessionToken` / `clearSessionToken`
+  over `localStorage` (key `app.session_token`) + `subscribeSessionToken` (custom
+  same-tab event + cross-tab `storage` event).
+- `use-session.ts` — `useSessionToken()` (`useSyncExternalStore`, reactive) and
+  `useSession()` (runs `session.me` with the token; `enabled` only when a token
+  exists) returning `{ sessionToken, user, isPending, isAuthenticated }`.
+- `use-auth.ts` — `useSignIn` / `useSignUp` (store the returned token on success)
+  and `useSignOut` (revoke via the vanilla cRPC client, then clear the token).
+  These replace the old per-app `auth-client.ts` (deleted). `web` uses all three;
+  `dashboard` uses sign-in + sign-out (no self-signup).
+- Authed call sites thread the token: `crpc.X.queryOptions({ ...args, sessionToken })`.
+
+Each frontend app accepts **exactly one role**: `apps/web` allows only
+`role === "user"`, `apps/dashboard` only `role === "admin"`. Every other role
+lands on `/access-denied`. Separating by app keeps each `_authenticated`
+subtree scoped to a single audience.
+
+#### Session gate (client-side)
+
+- `_authenticated.tsx` is `ssr: false`. Its `beforeLoad` does a cheap,
+  flash-free token-presence check (`getSessionToken()` — runs on the client, so
+  localStorage is available) and redirects to `/auth?callbackUrl=…` when there's
+  no token. The **authoritative role check** is in the layout component via
+  `useSession()`: while `me` is pending it renders a spinner; if `me` resolves
+  to no user the token is stale/expired/revoked → an effect clears it and it
+  redirects to `/auth`; on role mismatch → `/access-denied`; otherwise the
+  shell renders. Because `me` is a live Convex subscription, a server-side
+  sign-out / session deletion re-runs the query and bounces the user
+  automatically.
+- `_public/auth.tsx`'s `beforeLoad` bounces already-signed-in visitors (token
+  present) to `/`; a stale token resolves in at most one bounce (the authed
+  gate clears it). After auth success, **full-page navigation** with
+  `window.location.assign(...)` so the router rebuilds with the token already in
+  localStorage.
+- `/access-denied` (`apps/*/src/routes/_public/access-denied.tsx`): a
+  `ShieldAlert` card with a "退出登录" button wired to `useSignOut`. We do **not**
+  auto-sign-out on landing — the user chooses.
 
 #### Cold-start: minting the first admin
 
-Because `additionalFields.role` is `input: false` with `defaultValue: "user"`, every signup lands as a `user` — there is no client path to create an admin. And `invitations.create` is `authMutation.requires(["admin"])`, so the first invitation can't be minted by anyone either. To break this chicken-and-egg, run `users:bootstrapAdmin` once against a clean deployment from the operator shell:
+Signup always creates a `role: "user"`, and `invitations.create` requires an
+existing admin — a chicken-and-egg. Break it by running `users:bootstrapAdmin`
+once against a clean deployment from the operator shell:
 
 ```bash
 cd packages/backend
@@ -30,20 +155,12 @@ CONVEX_DEPLOY_KEY='prod:<name>|<token>' \
 bunx convex run users:bootstrapAdmin '{"username":"alice","password":"<pw>"}' --env-file .env.prod
 ```
 
-It calls Better Auth's `signUpEmail` internally (so the user/account/credential rows go through the same flow as a normal signup) and then immediately updates `role` from `"user"` to `"admin"`. Then sign in on the dashboard (whatever `VITE_SITE_URL` you wired up for `apps/dashboard`, or `https://dashboard.localhost` in dev) with the same username and password — the JWT will carry `role: "admin"` from the first session.
+It hashes the password and inserts the `user` (role `admin`) + `credentials`
+rows directly. Then sign in on the dashboard (whatever `VITE_SITE_URL` you
+wired for `apps/dashboard`, or `https://dashboard.localhost` in dev) with the
+same username and password.
 
-Safety net: `bootstrapAdmin` refuses to run if any admin already exists (returns `CONFLICT`). Subsequent admins must be promoted manually via the Convex dashboard (edit the user row's `role` from `"user"` to `"admin"`); add a follow-up internal mutation if that becomes recurring.
-
-#### Session gate (server-authoritative JWT read)
-
-- `packages/app-convex/src/auth-guard.ts` exports a single function, `fetchSessionClaims()` — a `createServerFn({ method: "GET" })` whose handler reads the httpOnly Better Auth JWT cookie from the request header and decodes the payload. The cookie name is `better-auth.convex_jwt` in dev but `__Secure-better-auth.convex_jwt` over HTTPS in prod (Better Auth auto-prefixes secure cookies); the regex matches both via an optional `(?:__Secure-)?` group, **don't drop it** or prod sessions silently decode to null and bounce signed-in users back to `/auth`. Does not trust any client-side state — only the JWT cookie. Both apps import it the same way: `import { fetchSessionClaims } from "@repo/app-convex/auth-guard"`.
-- **Two-file split (`auth-guard.ts` + `auth-guard.server.ts`)**: the actual cookie-parsing, JWT refresh, and `getRequest()` call live in a sibling `auth-guard.server.ts` in the same package. The handler in `auth-guard.ts` reaches them via a **dynamic `await import("./auth-guard.server")` inside the handler body** — never a top-level static import. This split is required by `tanstack-start-core:import-protection`: because `auth-guard.ts` is statically imported by route components (`_authenticated.tsx`, `_public/auth.tsx`), a top-level `import "@tanstack/react-start/server"` here would be flagged as "Import denied in client environment" and blow up at SSR time. The `.server.ts` suffix is the plugin's documented escape hatch — the bundler emits it as a server-only chunk and the dynamic `import()` is only reachable from the `createServerFn` handler, which the transform keeps on the server. **If you touch `auth-guard.ts`, keep the dynamic import; don't hoist the server call back to a top-level import or the import-protection plugin will reject it.**
-- **Stale-JWT refresh**: if the JWT is missing or within a 10-second expiry skew but a `session_token` cookie is present, `readSessionClaims` (in `auth-guard.server.ts`) POSTs the session cookie to `VITE_CONVEX_SITE_URL/api/auth/convex/token` to mint a fresh JWT. This is a plain `fetch`, **not** kitcn's `getToken()` — importing `./auth-server` would pull `@convex-dev/better-auth/react-start` into the client bundle, where its nested `import("@tanstack/react-start/server")` 404s at runtime.
-- **Refresh grace period**: `refreshJwt` distinguishes deterministic auth failures from transient outages. A `401`/`403` from the Convex token endpoint means the session cookie is genuinely invalid — `refreshJwt` returns null, `readSessionClaims` returns null, and the route bounces to `/auth`. **Everything else** — network error, 5xx, 404, 429, malformed JSON — throws a local `JwtRefreshError`. `readSessionClaims` catches that error and falls back to the stale JWT claims it decoded before the refresh attempt, so a brief Convex outage (a few seconds of 5xx, DNS flapping) no longer silently logs signed-in users out. The fallback path logs to `console.error` for ops visibility; subsequent navs retry the refresh. If there's no stale JWT to fall back on (rare: fresh session where the `convex_jwt` cookie hasn't landed yet), the error rethrows so the router's error surface handles it instead of looping the user through `/auth`.
-- `packages/app-convex/src/jwt-claims.ts` holds the decoding helpers (`decodeJwtPayload`, `normalizeClaims`, `claimsFromToken`) and the `SessionClaims` type. `UserRole` is imported from `@repo/backend/shared/tables/user` (not redefined — same type as the backend), and `normalizeClaims` uses the shared `isUserRole` type guard to narrow the JWT's `role` claim.
-- Cost model: `fetchSessionClaims()` is ~0 RTT on SSR (handler inlined into the same process) and 1 RTT on client nav (internal `/_serverFn/...` endpoint). Every client navigation inside the authenticated shell pays this RTT.
-- **Why no client-side fast path**: an optimistic `readAuthStoreState()` that read Better Auth's in-memory session atom was attempted multiple times and permanently reverted. Mixing regular exports alongside TanStack Start server functions in `auth-guard.ts` defeats the server-fn transform, dragging server-only imports (`@tanstack/react-start/server`) into the client bundle and triggering `vite:preloadError` reload loops in production. **Do not re-introduce a client-side auth read in this file** (even now that it lives in `packages/app-convex/src/`). If you genuinely need to expose something isomorphic here, put it in `auth-guard.server.ts` alongside `readSessionClaims` and reach it through a dedicated `createServerFn` handler — don't mix server and client exports in the `.ts` entry.
-- `_authenticated.tsx`'s `beforeLoad` calls `fetchSessionClaims()` directly (redirect to `/auth?callbackUrl=...` if null, to `/access-denied` if the role doesn't match the app's required role — `"user"` for `apps/web`, `"admin"` for `apps/dashboard`). It sets `shouldReload: true` so the gate re-runs on sibling client navs inside the authenticated shell (e.g. dashboard's `/` → `/invitations`), not just fresh entries.
-- `_public/auth.tsx`'s `beforeLoad` uses the same `fetchSessionClaims()` call to bounce already-signed-in visitors to `/`. `_public.tsx` itself is a bare `<Outlet />` with no guard — the check lives on the individual routes that need it.
-- `/access-denied` lives at `apps/web/src/routes/_public/access-denied.tsx`: a `ShieldAlert` card with a "退出登录" button that triggers `useSignOutMutationOptions` on click. We deliberately **do not** auto-sign-out on landing — the user chooses.
-- There is no `users.me` query, no `useCurrentUser` hook, and the frontend never asks Convex who the current user is. The server-fn JWT read is the sole identity path for routing.
+Safety net: `bootstrapAdmin` refuses to run if any admin already exists
+(returns `CONFLICT`). Promote subsequent admins via the Convex dashboard (edit
+the user row's `role`); add a follow-up internal mutation if it becomes
+recurring.
