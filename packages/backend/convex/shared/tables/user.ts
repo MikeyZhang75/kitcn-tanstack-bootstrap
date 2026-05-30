@@ -6,11 +6,10 @@ export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 // ─── Username constraints ──────────────────────────────────────────────────
-// Mirrors the Better Auth username plugin's own validator (3–30 chars,
-// alphanumeric + underscore). Shared between the backend signup procedure
-// and the frontend auth form so the rules — and their Chinese error
-// messages — stay in sync. The plugin re-validates and normalizes to
-// lowercase server-side during signUpEmail.
+// 3–30 chars, alphanumeric + underscore. The username is the canonical login
+// handle: stored lowercased (so login is case-insensitive) and unique. Shared
+// between the backend auth procedures and the frontend auth form so the rules
+// — and their Chinese error messages — stay in sync.
 
 export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 30;
@@ -43,6 +42,15 @@ export const passwordSchema = z
 // The invitation-code validator is canonically defined alongside the
 // invitations table (`invitationCodeInputSchema`) and shared with the admin
 // create flow — same length / charset guarantees on both ends.
+
+// Sign-in deliberately does NOT reuse `passwordSchema`: the min-length policy
+// applies to *new* passwords only. An existing account whose password predates
+// a future policy bump must still be able to sign in — so accept any non-empty
+// string and let credential verification be the gate.
+export const signInInputSchema = z.object({
+	username: usernameSchema,
+	password: z.string().min(1, "请输入密码"),
+});
 
 export const signUpWithInvitationInputSchema = z.object({
 	username: usernameSchema,

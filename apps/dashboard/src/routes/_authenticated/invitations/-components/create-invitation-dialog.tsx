@@ -2,6 +2,7 @@
 
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { useSessionToken } from "@repo/app-convex/use-session";
 import { invitationCodeInputSchema } from "@repo/backend/shared/tables/invitations";
 import { Button } from "@repo/ui/components/button";
 import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
@@ -29,6 +30,7 @@ export function CreateInvitationDialog({
 	onCreated,
 }: CreateInvitationDialogProps) {
 	const crpc = useCRPC();
+	const sessionToken = useSessionToken() ?? "";
 	const [open, setOpen] = useState(false);
 	const [code, setCode] = useState("");
 	const [codeError, setCodeError] = useState<string | null>(null);
@@ -43,16 +45,16 @@ export function CreateInvitationDialog({
 	const handleSubmit = () => {
 		const trimmed = code.trim();
 
-		let payload: { code?: string };
+		let payload: { code?: string; sessionToken: string };
 		if (trimmed.length === 0) {
-			payload = {};
+			payload = { sessionToken };
 		} else {
 			const parsed = invitationCodeInputSchema.safeParse(trimmed);
 			if (!parsed.success) {
 				setCodeError(parsed.error.issues[0]?.message ?? "邀请码无效");
 				return;
 			}
-			payload = { code: parsed.data };
+			payload = { code: parsed.data, sessionToken };
 		}
 
 		createMutation.mutate(payload, {

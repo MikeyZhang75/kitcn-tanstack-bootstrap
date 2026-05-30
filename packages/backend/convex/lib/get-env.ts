@@ -13,8 +13,6 @@ const envSchema = z.object({
 				.filter((entry) => entry.length > 0),
 		)
 		.pipe(z.array(z.url()).nonempty()),
-	BETTER_AUTH_SECRET: z.string().optional(),
-	JWKS: z.string().optional(),
 });
 
 export const getEnv = createEnv({

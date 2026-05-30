@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "portless run vite dev",
 		"build": "vite build",
+		"deploy": "vite build && wrangler deploy",
 		"preview": "vite preview",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"
@@ -24,7 +25,6 @@
 		"@tanstack/react-start": "^1.167.62",
 		"@tanstack/react-table": "^8.21.3",
 		"@tanstack/router-plugin": "^1.167.32",
-		"better-auth": "1.6.9",
 		"convex": "1.37.0",
 		"kitcn": "0.14.2",
 		"lucide-react": "^1.8.0",

@@ -2,6 +2,7 @@
 
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { useSessionToken } from "@repo/app-convex/use-session";
 import type { DataTablePagination } from "@repo/ui/components/custom-ui/data-table";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
@@ -26,6 +27,9 @@ const DEFAULT_PAGE_SIZE = 20;
 
 function InvitationsPage() {
 	const crpc = useCRPC();
+	// All invitations procedures are admin-only; thread the session token from
+	// localStorage into every call (guaranteed present inside _authenticated).
+	const sessionToken = useSessionToken() ?? "";
 	const [pagination, dispatchPagination] = useReducer(
 		invitationsPaginationReducer,
 		DEFAULT_PAGE_SIZE,
@@ -39,11 +43,17 @@ function InvitationsPage() {
 	// one offset-based index scan, so a jump from page 0 to page N is a
 	// single WS round-trip.
 	const pageQuery = useQuery({
-		...crpc.invitations.list.queryOptions({ page: pageIndex, pageSize }),
+		...crpc.invitations.list.queryOptions({
+			page: pageIndex,
+			pageSize,
+			sessionToken,
+		}),
 		placeholderData: keepPreviousData,
 	});
 
-	const countQuery = useQuery(crpc.invitations.count.queryOptions({}));
+	const countQuery = useQuery(
+		crpc.invitations.count.queryOptions({ sessionToken }),
+	);
 	const total = countQuery.data?.data?.total;
 
 	const invitations: InvitationRow[] = useMemo(
@@ -115,7 +125,7 @@ function InvitationsPage() {
 	const handleRevokeConfirm = () => {
 		if (!revoking) return;
 		revokeMutation.mutate(
-			{ id: revoking.id },
+			{ id: revoking.id, sessionToken },
 			{
 				onSuccess: () => {
 					toast.success("邀请码已撤销");

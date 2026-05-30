@@ -1,8 +1,8 @@
 "use client";
 
-import { fetchSessionClaims } from "@repo/app-convex/auth-guard";
-import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { getSessionToken } from "@repo/app-convex/session-store";
+import { useSignIn, useSignUp } from "@repo/app-convex/use-auth";
 import {
 	PASSWORD_MIN_LENGTH,
 	USERNAME_MAX_LENGTH,
@@ -21,12 +21,9 @@ import {
 import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
 import { Field, FieldGroup, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
-import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type SyntheticEvent, useReducer } from "react";
 import { toast } from "sonner";
-
-import { authClient } from "@/lib/convex/auth-client";
 
 type AuthSearch = {
 	callbackUrl?: string;
@@ -47,8 +44,7 @@ type AuthFormAction =
 			field: keyof Omit<AuthFormState, "mode">;
 			value: string;
 	  }
-	| { type: "toggle_mode" }
-	| { type: "switch_to_signin_after_signup" };
+	| { type: "toggle_mode" };
 
 const initialAuthForm: AuthFormState = {
 	mode: "signin",
@@ -69,12 +65,6 @@ function authFormReducer(
 				...state,
 				mode: state.mode === "signin" ? "signup" : "signin",
 			};
-		case "switch_to_signin_after_signup":
-			// Signup succeeded but auto-signin failed — the account exists and
-			// the invitation code is consumed, so retrying signup would throw
-			// "邀请码已被使用". Keep username/password to let the user retry
-			// signin with one click; drop the now-useless invitation code.
-			return { ...state, mode: "signin", invitationCode: "" };
 	}
 }
 
@@ -83,16 +73,14 @@ export const Route = createFileRoute("/_public/auth")({
 		callbackUrl:
 			typeof search.callbackUrl === "string" ? search.callbackUrl : undefined,
 	}),
-	beforeLoad: async () => {
-		// Already-signed-in visitors have nothing to do on the login form.
-		// Bounce them home; the _authenticated layout then handles the role
-		// check (and may still end up redirecting to /access-denied).
-		//
-		// Uses the same server-authoritative JWT read as `_authenticated` —
-		// one source of truth for "is this user signed in?", no reliance on
-		// client-side in-memory state.
-		const claims = await fetchSessionClaims();
-		if (claims) {
+	beforeLoad: () => {
+		// Already-signed-in visitors (token present) have nothing to do on the
+		// login form — bounce them home; the _authenticated gate then validates
+		// the role. `_public` is `ssr: false`, so this beforeLoad runs on the
+		// client (even on hard loads) and localStorage is available. A stale
+		// token resolves to /auth in at most one bounce (the authed gate clears
+		// it).
+		if (getSessionToken() != null) {
 			throw redirect({ to: "/" });
 		}
 	},
@@ -101,15 +89,15 @@ export const Route = createFileRoute("/_public/auth")({
 
 function AuthPage() {
 	const { callbackUrl } = Route.useSearch();
-	const crpc = useCRPC();
 	const [form, dispatchForm] = useReducer(authFormReducer, initialAuthForm);
 	const { mode, username, password, invitationCode } = form;
 
+	const signIn = useSignIn();
+	const signUp = useSignUp();
+
 	const onAuthSuccess = () => {
-		// Full page navigation so the router rebuilds with the fresh
-		// session cookie and re-runs every beforeLoad against it.
-		// Avoids the race where useNavigate() evaluates _authenticated's
-		// beforeLoad before document.cookie has been updated.
+		// Full-page navigation so the router rebuilds from scratch and re-runs
+		// every beforeLoad with the freshly stored token in localStorage.
 		window.location.assign(callbackUrl ?? "/");
 	};
 
@@ -117,61 +105,23 @@ function AuthPage() {
 		toast.error(extractErrorMessage(error) ?? "出现错误");
 	};
 
-	const signIn = useMutation({
-		mutationFn: async (variables: { username: string; password: string }) => {
-			const { data, error } = await authClient.signIn.username(variables);
-			if (error) throw error;
-			return data;
-		},
-		onSuccess: onAuthSuccess,
-		onError: notifyError,
-	});
-	const signUpWithInvitation = useMutation(
-		crpc.signup.signUpWithInvitation.mutationOptions({
-			onSuccess: async () => {
-				// signUpEmail created the user but didn't set cookies (no HTTP ctx).
-				// Sign in via username to establish the session — normalization is
-				// handled server-side by the username plugin.
-				const { error } = await authClient.signIn.username({
-					username,
-					password,
-				});
-				if (error) {
-					// Transient signin failure after a successful signup would
-					// otherwise leave the user stranded: account created +
-					// invitation code consumed + no session, with signup retry
-					// blocked by "已被使用". Guide them to signin with credentials
-					// preserved instead of surfacing the raw network error.
-					toast.error("账户已创建，请使用用户名和密码登录", {
-						duration: 8000,
-					});
-					dispatchForm({ type: "switch_to_signin_after_signup" });
-					return;
-				}
-				onAuthSuccess();
-			},
-			onError: notifyError,
-		}),
-	);
-
-	const isPending = signIn.isPending || signUpWithInvitation.isPending;
+	const isPending = signIn.isPending || signUp.isPending;
 
 	function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 
 		if (mode === "signup") {
-			signUpWithInvitation.mutate({
-				username,
-				password,
-				invitationCode,
-			});
+			signUp.mutate(
+				{ username, password, invitationCode },
+				{ onSuccess: onAuthSuccess, onError: notifyError },
+			);
 			return;
 		}
 
-		signIn.mutate({
-			username,
-			password,
-		});
+		signIn.mutate(
+			{ username, password },
+			{ onSuccess: onAuthSuccess, onError: notifyError },
+		);
 	}
 
 	return (

@@ -12,7 +12,7 @@ Each doc below is imported into context. Read the relevant one(s) based on the t
 
 @docs/backend-architecture.md
 
-<!-- Auth flow: Better Auth + kitcn, JWT `role` claim, server-authoritative session gate via `fetchSessionClaims()`, stale-JWT refresh, and the two-file `auth-guard.ts` / `auth-guard.server.ts` split. -->
+<!-- Auth flow: custom session-token user system (no Better Auth, no JWT) — scrypt credentials, opaque session token in localStorage threaded into authed procedure inputs, client-side `_authenticated` gate (ssr:false) via `useSession`. -->
 
 @docs/auth.md
 

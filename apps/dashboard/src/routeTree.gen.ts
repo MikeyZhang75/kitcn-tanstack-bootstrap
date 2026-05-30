@@ -15,7 +15,6 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as PublicAuthRouteImport } from './routes/_public/auth'
 import { Route as PublicAccessDeniedRouteImport } from './routes/_public/access-denied'
 import { Route as AuthenticatedInvitationsIndexRouteImport } from './routes/_authenticated/invitations/index'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const PublicRoute = PublicRouteImport.update({
   id: '/_public',
@@ -46,24 +45,17 @@ const AuthenticatedInvitationsIndexRoute =
     path: '/invitations/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/access-denied': typeof PublicAccessDeniedRoute
   '/auth': typeof PublicAuthRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/invitations/': typeof AuthenticatedInvitationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/access-denied': typeof PublicAccessDeniedRoute
   '/auth': typeof PublicAuthRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/invitations': typeof AuthenticatedInvitationsIndexRoute
 }
 export interface FileRoutesById {
@@ -73,14 +65,13 @@ export interface FileRoutesById {
   '/_public/access-denied': typeof PublicAccessDeniedRoute
   '/_public/auth': typeof PublicAuthRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/_authenticated/invitations/': typeof AuthenticatedInvitationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/access-denied' | '/auth' | '/api/auth/$' | '/invitations/'
+  fullPaths: '/' | '/access-denied' | '/auth' | '/invitations/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/access-denied' | '/auth' | '/api/auth/$' | '/invitations'
+  to: '/' | '/access-denied' | '/auth' | '/invitations'
   id:
     | '__root__'
     | '/_authenticated'
@@ -88,14 +79,12 @@ export interface FileRouteTypes {
     | '/_public/access-denied'
     | '/_public/auth'
     | '/_authenticated/'
-    | '/api/auth/$'
     | '/_authenticated/invitations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   PublicRoute: typeof PublicRouteWithChildren
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -142,13 +131,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInvitationsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -182,7 +164,6 @@ const PublicRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   PublicRoute: PublicRouteWithChildren,
-  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -19,12 +19,14 @@ kitcn is a tRPC-flavored builder layered on Convex. You author procedures with `
 
 Procedure builders live in `packages/backend/convex/lib/crpc.ts`. The exported set:
 
-| Builder                                              | Auth                                         | Internal-only       |
-| ---------------------------------------------------- | -------------------------------------------- | ------------------- |
-| `publicQuery` / `publicMutation` / `publicAction`    | none                                         | no                  |
-| `authQuery` / `authMutation` / `authAction`          | **`.requires([...roles])` required**         | no                  |
-| `privateQuery` / `privateMutation` / `privateAction` | —                                            | yes (`.internal()`) |
-| `publicRoute` / `authRoute`                          | HTTP variants — `authRoute` also `.requires` | no                  |
+| Builder                                              | Auth                                 | Internal-only       |
+| ---------------------------------------------------- | ------------------------------------ | ------------------- |
+| `publicQuery` / `publicMutation` / `publicAction`    | none                                 | no                  |
+| `authQuery` / `authMutation`                         | **`.requires([...roles])` required** | no                  |
+| `privateQuery` / `privateMutation` / `privateAction` | —                                    | yes (`.internal()`) |
+| `publicRoute`                                        | HTTP variant — no auth               | no                  |
+
+There is no `authAction` / `authRoute`: authenticated procedures are WS query/mutation only, because the session token arrives as an **input field** (Convex actions/HTTP routes would have to read it from a header and resolve the session via an internal caller — nothing needs that). See [auth](auth.md) for the session-token model.
 
 The `auth*` variants are **namespace objects**, not builders directly. They expose a single method, `.requires(allowedRoles)`, which takes a non-empty tuple of `UserRole` values and returns the actual kitcn builder you chain `.input/.query/.mutation/...` onto. The roles parameter is typed `readonly [UserRole, ...UserRole[]]`, so the type system enforces a non-empty list — `.requires([])` is a compile error. Forgetting to call `.requires(...)` at all is also a compile error: `authMutation.input(...)` won't resolve because `authMutation` has no `.input` method, only `.requires`. This is the sole authorization model: **every authenticated procedure must declare which roles can call it at the procedure definition site.**
 
@@ -47,7 +49,7 @@ export const getMyProfile = authQuery.requires(USER_ROLES).query(...);
 // it's grep-friendly and stays in sync if a third role is ever added.
 ```
 
-Inside the procedure, `ctx.user` is typed `IdentityUser` (id, email, name, **role**). There is no separate `ctx.userId` — use `ctx.user.id` instead. If the caller's JWT is missing or the role isn't in the allowed tuple, the middleware throws `UNAUTHORIZED` or `FORBIDDEN` (Chinese message) before the procedure body runs. Identity comes from Better Auth sessions via `getIdentityUser(ctx)`, which uses the shared `isEnumMember(USER_ROLES, ...)` guard from `convex/shared/enum-guard.ts` to validate the JWT's `role` claim — see [auth](auth.md) for how `role` gets onto every issued token.
+Inside the procedure, `ctx.user` is typed `IdentityUser` (id, username, name, **role**). There is no separate `ctx.userId` — use `ctx.user.id` instead. Identity comes from the **session token**: the builders merge `z.object({ sessionToken })` into the input, and the middleware's `resolveSessionUser(ctx, token, roles)` looks the token up in the `session` table, rejecting a missing/expired session (`UNAUTHORIZED`) or a role outside the allowed tuple (`FORBIDDEN`) with a Chinese message before the body runs. It never touches `ctx.auth` — there is no JWT. See [auth](auth.md) for the full model (no Better Auth).
 
 ### cRPC response envelope (important, enforced by convention)
 

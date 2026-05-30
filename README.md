@@ -1,18 +1,18 @@
 # kitcn-tanstack-bootstrap
 
-A Bun + Turborepo monorepo template for shipping production apps on **TanStack Start + Convex (via [kitcn](https://kitcn.dev)) + Better Auth**, with a separate front-of-house app and admin dashboard sharing the same backend and design system.
+A Bun + Turborepo monorepo template for shipping production apps on **TanStack Start + Convex (via [kitcn](https://kitcn.dev))** with a custom session-token user system, a separate front-of-house app and admin dashboard sharing the same backend and design system.
 
 ## Stack
 
 | Layer    | What it uses                                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Runtime  | Bun 1.3.11, Turborepo 2.9                                                                                                         |
-| Frontend | TanStack Start (Vite + Nitro SSR), TanStack Router, TanStack Query                                                                |
+| Frontend | TanStack Start (Vite, SPA mode on Cloudflare Workers), TanStack Router, TanStack Query                                            |
 | Backend  | Convex with [kitcn](https://kitcn.dev) procedure builders + ORM                                                                   |
-| Auth     | [Better Auth](https://www.better-auth.com) (JWT `role` claim, server-authoritative session gate)                                  |
+| Auth     | Custom session-token user system (scrypt credentials, `localStorage` token, role-gated apps)                                      |
 | UI       | shadcn (base-ui variant) under `@repo/ui`                                                                                         |
 | Tooling  | [oxc](https://oxc.rs) (`oxfmt` + `oxlint --type-aware`), [portless](https://github.com/nicepkg/portless) named-localhost dev URLs |
-| Deploy   | Cloudflare Pages (per-app `wrangler.local.toml`)                                                                                  |
+| Deploy   | Cloudflare Workers via `@cloudflare/vite-plugin` (per-app `wrangler.jsonc`)                                                       |
 
 Two apps share the backend:
 
@@ -24,7 +24,7 @@ Two apps share the backend:
 - [Bun](https://bun.sh) ≥ 1.3.11 (required — `packageManager` is pinned)
 - [portless](https://github.com/nicepkg/portless) — `npm i -g portless`
 - A [Convex](https://convex.dev) account
-- (production) A [Cloudflare Pages](https://pages.cloudflare.com) account, `wrangler` CLI
+- (production) A [Cloudflare Workers](https://workers.cloudflare.com) account (`wrangler` is bundled as a dependency)
 
 ## Setup
 
@@ -56,7 +56,7 @@ bunx convex env set SITE_URLS "https://web.localhost,https://dashboard.localhost
 bunx kitcn dev --once
 ```
 
-`bunx kitcn dev --once` provisions `BETTER_AUTH_SECRET` and `JWKS` automatically on first run — no manual `openssl` or JWKS generation needed.
+`bunx kitcn dev --once` pushes the schema + functions to your new deployment. There are no auth secrets to provision — the app uses its own session-token system (scrypt password hashing in Convex), not Better Auth or JWTs.
 
 ### 4. Configure frontend env files
 
@@ -109,7 +109,7 @@ cd packages/backend
 bunx convex run users:bootstrapAdmin '{"username":"admin","password":"<your-password>"}'
 ```
 
-Then sign in at https://dashboard.localhost. The session JWT carries `role: "admin"` from the first session. See [docs/auth.md](docs/auth.md#cold-start-minting-the-first-admin) for prod variants and the safety net (refuses to run if any admin already exists).
+Then sign in at https://dashboard.localhost with that username and password. See [docs/auth.md](docs/auth.md#cold-start-minting-the-first-admin) for prod variants and the safety net (refuses to run if any admin already exists).
 
 ## Common scripts
 
@@ -152,9 +152,9 @@ First-party wrappers (DataTable, LoadingButton, NavUser) live under `@repo/ui/co
 CI deploys on push to `main` (when the workflow is wired up):
 
 1. Convex via `kitcn deploy`.
-2. Both apps to Cloudflare Pages — one `wrangler-action` step per `apps/web/wrangler.local.toml` and `apps/dashboard/wrangler.local.toml`.
+2. Both apps to Cloudflare Workers — each app's `deploy` script runs `vite build && wrangler deploy`, reading `apps/web/wrangler.jsonc` / `apps/dashboard/wrangler.jsonc`.
 
-Each app's `VITE_SITE_URL` must be baked in at build time to match its production domain (Better Auth uses it as the SSR `baseURL`):
+Each app is built with its own `VITE_SITE_URL` (its public origin, validated in `src/env.ts`):
 
 ```bash
 bun run build --filter=@repo/web        # with VITE_SITE_URL=https://app.example.com
@@ -167,7 +167,7 @@ For schema changes that need a backfill (e.g. adding a `.notNull()` column), fol
 
 - [Monorepo layout](docs/monorepo-layout.md) — workspaces, root scripts, deploy pipeline
 - [Backend architecture](docs/backend-architecture.md) — kitcn procedure builders, `{ code, message, data? }` cRPC envelope
-- [Auth flow](docs/auth.md) — Better Auth + JWT role claim, session gate, cold-start admin
+- [Auth flow](docs/auth.md) — custom session-token auth (no Better Auth/JWT), client-side role gate, cold-start admin
 - [Frontend architecture](docs/frontend-architecture.md) — TanStack Router layouts, FSD-style slices
 - [UI components](docs/ui-components.md) — shadcn (base-ui variant) and `@repo/ui/custom-ui/`
 - [Invitations feature](docs/feature-invitations.md) — admin-minted signup codes, state machine
