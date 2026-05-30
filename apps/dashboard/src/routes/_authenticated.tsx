@@ -21,14 +21,12 @@ import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 
 export const Route = createFileRoute("/_authenticated")({
-	// Client-only: the entire authenticated app renders on the client (no SSR
-	// pass) so the gate can read the session token from localStorage. Public
-	// routes (/auth, /access-denied) still SSR normally.
+	// Client-only render (`ssr: false`). The whole app renders on the client —
+	// `_public` is `ssr: false` too — so `beforeLoad` runs on the client and
+	// localStorage is available here. This is a cheap, flash-free presence check
+	// for the signed-out case; the authoritative role check happens in the
+	// component once `session.me` resolves (a token can be stale/expired/revoked).
 	ssr: false,
-	// Cheap, flash-free gate for the signed-out case — beforeLoad runs on the
-	// client, so localStorage is available. This only checks token presence;
-	// the authoritative role check happens in the component once `session.me`
-	// resolves (a token can be stale/expired/revoked).
 	beforeLoad: ({ location }) => {
 		if (getSessionToken() == null) {
 			throw redirect({ to: "/auth", search: { callbackUrl: location.href } });

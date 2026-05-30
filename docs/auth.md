@@ -7,7 +7,7 @@ as a procedure argument. kitcn's auth runtime is intentionally **disabled** (no
 `convex/functions/auth.ts`), so `generated/auth.ts` is the `createDisabledAuthRuntime`
 stub — never call `getAuth`/`auth.*`.
 
-#### Why session tokens (and why the authenticated app is client-rendered)
+#### Why session tokens (and why the whole app is client-rendered)
 
 The goal was a client-side app that keeps its credential in `localStorage`
 (not an httpOnly cookie), so auth no longer depends on SSR/HTTP cookie
@@ -19,14 +19,23 @@ plumbing. Two consequences:
   Convex-native channel for an opaque token, so every authenticated procedure
   receives `sessionToken` in its input and validates it against the `session`
   table. The cRPC builders merge this field in automatically (below).
-- **`ssr: false` on `_authenticated`.** localStorage doesn't exist during SSR,
-  so the route gate can't run server-side. The entire authenticated subtree is
-  marked `ssr: false` (client-only render) in both apps; the public `/auth` and
-  `/access-denied` routes still SSR normally. (Full TanStack Start `spa` mode
-  was avoided: its prerender step boots a `wrangler pages dev` preview server,
-  which is fragile in CI and unbuildable in the sandbox. `ssr: false` gives the
-  same client-side rendering where it's needed with no prerender step and an
-  unchanged Cloudflare Pages SSR deploy.)
+- **`ssr: false` on every layout (the whole app renders on the client).**
+  localStorage doesn't exist during SSR, so the route gate can't run
+  server-side. Both layout groups — `_authenticated` **and** `_public` — set
+  `ssr: false` in both apps, so every route's `beforeLoad`/`loader`/component
+  runs on the client (the Nitro worker still SSRs the bare document shell per
+  request). This makes the whole app a SPA: the `_authenticated` gate and the
+  `/auth` "bounce already-signed-in visitors" check both read localStorage in
+  `beforeLoad` on hard loads, not just in-app navigation. (Full TanStack Start
+  **`spa` mode** — `tanstackStart({ spa: { enabled: true } })` — was tried and
+  rejected: it force-enables a build-time shell prerender that boots
+  `npx wrangler pages dev` (the `cloudflare-pages` Nitro preset's preview
+  command) to render `/_shell.html`. That needs workerd and **fails the build**
+  in CI / the sandbox — verified. Getting real `spa` mode would mean migrating
+  the deploy off Cloudflare Pages to Cloudflare **Workers** via
+  `@cloudflare/vite-plugin`, where the shell prerender runs in-process. Per-route
+  `ssr: false` gives the same whole-app client rendering with no prerender step
+  and an unchanged Cloudflare Pages deploy.)
 
 #### Storage model
 

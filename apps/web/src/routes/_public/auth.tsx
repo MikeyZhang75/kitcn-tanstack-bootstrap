@@ -76,9 +76,10 @@ export const Route = createFileRoute("/_public/auth")({
 	beforeLoad: () => {
 		// Already-signed-in visitors (token present) have nothing to do on the
 		// login form — bounce them home; the _authenticated gate then validates
-		// the role. SPA mode runs beforeLoad on the client, so localStorage is
-		// available. A stale token resolves to /auth in at most one bounce
-		// (the authed gate clears it).
+		// the role. `_public` is `ssr: false`, so this beforeLoad runs on the
+		// client (even on hard loads) and localStorage is available. A stale
+		// token resolves to /auth in at most one bounce (the authed gate clears
+		// it).
 		if (getSessionToken() != null) {
 			throw redirect({ to: "/" });
 		}
