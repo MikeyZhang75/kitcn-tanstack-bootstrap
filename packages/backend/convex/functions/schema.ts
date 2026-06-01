@@ -1,4 +1,5 @@
 import {
+	boolean,
 	convexTable,
 	defineSchema,
 	id,
@@ -68,11 +69,22 @@ export const invitationsTable = convexTable("invitations", {
 	createdBy: id("user").references(() => userTable.id),
 });
 
+// Global app settings — a single-row (singleton) table. There is at most one
+// row: reads default when it's absent (see functions/settings.ts), and the
+// admin toggle on the dashboard /settings page upserts it. No key/index needed
+// — the singleton is fetched via `findFirst`.
+export const settingsTable = convexTable("settings", {
+	// When true (default), signup requires a valid invitation code; when false,
+	// registration is open and `signUpWithInvitation` skips the invitation check.
+	requireInvitationCode: boolean().notNull(),
+});
+
 export const tables = {
 	user: userTable,
 	credentials: credentialsTable,
 	session: sessionTable,
 	invitations: invitationsTable,
+	settings: settingsTable,
 };
 
 // No `.relations(...)`: nothing in the app traverses relations (the

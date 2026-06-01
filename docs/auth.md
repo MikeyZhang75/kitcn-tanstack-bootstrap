@@ -40,7 +40,7 @@ plumbing. Two consequences:
 
 #### Storage model
 
-Four tables in `schema.ts` (all plain app tables — kitcn manages none of them):
+Five tables in `schema.ts` (all plain app tables — kitcn manages none of them):
 
 - `user` — `username` (unique, lowercased login handle), `name` (display), `role`.
 - `credentials` — `userId` (unique FK → user), `passwordHash`. Kept separate
@@ -49,6 +49,11 @@ Four tables in `schema.ts` (all plain app tables — kitcn manages none of them)
   The row's existence + `expiresAt` is the source of truth; there is nothing to
   cryptographically verify.
 - `invitations` — unchanged (see [feature-invitations](feature-invitations.md)).
+- `settings` — a single-row (singleton) `requireInvitationCode: boolean()`
+  holding the global signup gate. The row is absent until an admin first toggles
+  it; reads default to `true` (`DEFAULT_REGISTRATION_SETTINGS` in
+  `shared/tables/settings.ts`). Admins flip it from the dashboard `/settings`
+  page; `signUpWithInvitation` reads it to decide whether a code is required.
 
 Password hashing lives in `convex/lib/password.ts`: **scrypt via
 `@noble/hashes`** (pure JS, runs in the Convex V8 isolate), salt from
@@ -72,10 +77,24 @@ new hashes) and compares in constant time.
     current identity. The **only** place the frontend asks the backend "who am
     I", used by the route gate + sidebar user menu.
 - `convex/functions/signup.ts` — `signUpWithInvitation` (`publicMutation`):
-  one atomic transaction validates the invitation, creates the user +
-  credential, consumes the invitation, mints a session, and returns
-  `ok({ sessionToken })`. The client is signed in immediately — no separate
-  sign-in round trip.
+  one atomic transaction creates the user + credential, mints a session, and
+  returns `ok({ sessionToken })` (the client is signed in immediately — no
+  separate sign-in round trip). Whether an invitation is required is the live
+  `settings.requireInvitationCode` flag (default `true`): when on it validates
+  and consumes an `active` code (missing/used/revoked → `BAD_REQUEST`); when an
+  admin has opened registration the `invitationCode` input is ignored. The
+  input schema's `invitationCode` is therefore `.optional()` — presence is
+  enforced in the body, not the validator.
+- `convex/functions/settings.ts`:
+  - `getRegistrationSettings` (`publicQuery`, no input) — returns
+    `ok({ requireInvitationCode })`. **Public** so the unauthenticated web signup
+    form can read it to show/require the invitation field (only this one
+    non-sensitive boolean is exposed); the dashboard `/settings` page reuses the
+    same query. Defaults when the singleton row is absent.
+  - `setRequireInvitationCode` (`authMutation.requires(["admin"])`, input
+    `setRequireInvitationCodeInputSchema`) — upserts the singleton (update the
+    row or insert the first). Convex OCC retries guard against duplicate
+    singleton rows on a concurrent first write.
 - `convex/functions/users.ts` — `bootstrapAdmin` (`privateMutation`), cold-start
   (below).
 

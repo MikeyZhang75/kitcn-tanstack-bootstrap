@@ -55,7 +55,12 @@ export const signInInputSchema = z.object({
 export const signUpWithInvitationInputSchema = z.object({
 	username: usernameSchema,
 	password: passwordSchema,
-	invitationCode: invitationCodeInputSchema,
+	// Optional: required only when registration is gated behind an invitation
+	// code (the live `settings.requireInvitationCode` flag, default true). The
+	// backend reads that flag and enforces presence + validity when on; when
+	// off, the field is ignored. The web signup form shows / requires the field
+	// conditionally on the same flag.
+	invitationCode: invitationCodeInputSchema.optional(),
 });
 
 // Operator-only — consumed by the internal `users.bootstrapAdmin` mutation,

@@ -56,11 +56,20 @@ export declare const api: {
       any
     >;
   };
+  settings: {
+    getRegistrationSettings: FunctionReference<"query", "public", {}, any>;
+    setRequireInvitationCode: FunctionReference<
+      "mutation",
+      "public",
+      { requireInvitationCode: boolean; sessionToken: string },
+      any
+    >;
+  };
   signup: {
     signUpWithInvitation: FunctionReference<
       "mutation",
       "public",
-      { invitationCode: string; password: string; username: string },
+      { invitationCode?: string; password: string; username: string },
       any
     >;
   };

@@ -5,6 +5,7 @@ import { hashPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
 import { generateSessionToken } from "../lib/session-token";
 import { SESSION_TTL_MS } from "../shared/tables/session";
+import { DEFAULT_REGISTRATION_SETTINGS } from "../shared/tables/settings";
 import { signUpWithInvitationInputSchema } from "../shared/tables/user";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -14,26 +15,48 @@ import {
 	userTable,
 } from "./schema";
 
-// Invitation-gated signup. One transactional mutation: validate the invitation,
-// create the user + credential, consume the invitation, and mint a session —
-// then return the token so the client is signed in immediately (no separate
-// sign-in round trip). All of this is atomic; if any step throws, nothing is
-// written (the invitation is not consumed).
+// Signup. One transactional mutation: (optionally) validate the invitation,
+// create the user + credential, (optionally) consume the invitation, and mint a
+// session — then return the token so the client is signed in immediately (no
+// separate sign-in round trip). All of this is atomic; if any step throws,
+// nothing is written (the invitation is not consumed).
+//
+// Whether an invitation is required is the live `settings.requireInvitationCode`
+// flag (default true, see shared/tables/settings.ts): when on, the caller must
+// supply a valid `active` code, which is consumed below; when an admin has
+// opened registration from the dashboard /settings page, the code is ignored.
 export const signUpWithInvitation = publicMutation
 	.input(signUpWithInvitationInputSchema)
 	.mutation(async ({ ctx, input }) => {
-		const invitation = await ctx.orm.query.invitations.findFirst({
-			where: { code: input.invitationCode },
-			columns: { id: true, status: true },
+		const settings = await ctx.orm.query.settings.findFirst({
+			columns: { requireInvitationCode: true },
 		});
-		if (!invitation) {
-			throw error("BAD_REQUEST", "邀请码无效");
-		}
-		if (invitation.status === "used") {
-			throw error("BAD_REQUEST", "邀请码已被使用");
-		}
-		if (invitation.status === "revoked") {
-			throw error("BAD_REQUEST", "邀请码已撤销");
+		const requireInvitationCode =
+			settings?.requireInvitationCode ??
+			DEFAULT_REGISTRATION_SETTINGS.requireInvitationCode;
+
+		// Validate the invitation up front so a missing/bad/used/revoked code is
+		// rejected before any row is written; the matched row's id is consumed
+		// after user creation. When registration is open, skip this entirely.
+		let invitationId: string | null = null;
+		if (requireInvitationCode) {
+			if (!input.invitationCode) {
+				throw error("BAD_REQUEST", "邀请码无效");
+			}
+			const invitation = await ctx.orm.query.invitations.findFirst({
+				where: { code: input.invitationCode },
+				columns: { id: true, status: true },
+			});
+			if (!invitation) {
+				throw error("BAD_REQUEST", "邀请码无效");
+			}
+			if (invitation.status === "used") {
+				throw error("BAD_REQUEST", "邀请码已被使用");
+			}
+			if (invitation.status === "revoked") {
+				throw error("BAD_REQUEST", "邀请码已撤销");
+			}
+			invitationId = invitation.id;
 		}
 
 		// Lowercase the canonical handle (case-insensitive login); keep the
@@ -62,10 +85,13 @@ export const signUpWithInvitation = publicMutation
 
 		await ctx.orm.insert(credentialsTable).values({ userId, passwordHash });
 
-		await ctx.orm
-			.update(invitationsTable)
-			.set({ status: "used", usedAt: new Date(), usedBy: userId })
-			.where(eq(invitationsTable.id, invitation.id));
+		// Consume the invitation only when one was required and matched.
+		if (invitationId) {
+			await ctx.orm
+				.update(invitationsTable)
+				.set({ status: "used", usedAt: new Date(), usedBy: userId })
+				.where(eq(invitationsTable.id, invitationId));
+		}
 
 		const sessionToken = generateSessionToken();
 		await ctx.orm.insert(sessionTable).values({
