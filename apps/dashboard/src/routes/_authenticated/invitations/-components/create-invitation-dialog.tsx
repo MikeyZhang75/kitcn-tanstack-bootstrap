@@ -114,7 +114,6 @@ export function CreateInvitationDialog({
 					/>
 					<LoadingButton
 						loading={createMutation.isPending}
-						loadingText="创建中…"
 						onClick={handleSubmit}
 					>
 						创建

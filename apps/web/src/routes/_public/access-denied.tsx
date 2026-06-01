@@ -33,7 +33,6 @@ function AccessDeniedPage() {
 					<LoadingButton
 						className="w-full"
 						loading={signOut.isPending}
-						loadingText="退出中…"
 						onClick={() =>
 							signOut.mutate(undefined, {
 								onSuccess: () => window.location.assign("/auth"),

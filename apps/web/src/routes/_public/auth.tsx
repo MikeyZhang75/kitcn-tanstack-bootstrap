@@ -216,7 +216,6 @@ function AuthPage() {
 						className="w-full"
 						form="auth-form"
 						loading={isPending}
-						loadingText="处理中…"
 						type="submit"
 					>
 						{mode === "signup" ? "创建账户" : "登录"}
