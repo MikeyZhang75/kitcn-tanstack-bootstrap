@@ -403,6 +403,20 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  settings: {
+    document: {
+      requireInvitationCode: boolean;
+      _id: Id<"settings">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "requireInvitationCode";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   user: {
     document: {
       name: string;

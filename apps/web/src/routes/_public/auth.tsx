@@ -1,8 +1,14 @@
 "use client";
 
+import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { getSessionToken } from "@repo/app-convex/session-store";
 import { useSignIn, useSignUp } from "@repo/app-convex/use-auth";
+import {
+	INVITATION_CODE_MAX_LENGTH,
+	INVITATION_CODE_MIN_LENGTH,
+	INVITATION_CODE_PATTERN,
+} from "@repo/backend/shared/tables/invitations";
 import {
 	PASSWORD_MIN_LENGTH,
 	USERNAME_MAX_LENGTH,
@@ -21,6 +27,7 @@ import {
 import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
 import { Field, FieldGroup, FieldLabel } from "@repo/ui/components/field";
 import { Input } from "@repo/ui/components/input";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type SyntheticEvent, useReducer } from "react";
 import { toast } from "sonner";
@@ -95,6 +102,16 @@ function AuthPage() {
 	const signIn = useSignIn();
 	const signUp = useSignUp();
 
+	const crpc = useCRPC();
+	// Whether signup requires an invitation code is an admin-controlled, live
+	// setting (dashboard /settings). Default to requiring it until the query
+	// resolves — the safe default never lets a gated signup omit the field.
+	const settingsQuery = useQuery(
+		crpc.settings.getRegistrationSettings.queryOptions({}),
+	);
+	const requireInvitationCode =
+		settingsQuery.data?.data?.requireInvitationCode ?? true;
+
 	const onAuthSuccess = () => {
 		// Full-page navigation so the router rebuilds from scratch and re-runs
 		// every beforeLoad with the freshly stored token in localStorage.
@@ -112,7 +129,13 @@ function AuthPage() {
 
 		if (mode === "signup") {
 			signUp.mutate(
-				{ username, password, invitationCode },
+				{
+					username,
+					password,
+					// Only send a code when one is required; otherwise omit it so the
+					// optional backend field stays undefined.
+					invitationCode: requireInvitationCode ? invitationCode : undefined,
+				},
 				{ onSuccess: onAuthSuccess, onError: notifyError },
 			);
 			return;
@@ -166,12 +189,14 @@ function AuthPage() {
 									value={username}
 								/>
 							</Field>
-							{mode === "signup" ? (
+							{mode === "signup" && requireInvitationCode ? (
 								<Field>
 									<FieldLabel htmlFor="auth-invitation">邀请码</FieldLabel>
 									<Input
 										autoComplete="off"
 										id="auth-invitation"
+										maxLength={INVITATION_CODE_MAX_LENGTH}
+										minLength={INVITATION_CODE_MIN_LENGTH}
 										onChange={(event) =>
 											dispatchForm({
 												type: "set_field",
@@ -179,6 +204,7 @@ function AuthPage() {
 												value: event.target.value,
 											})
 										}
+										pattern={INVITATION_CODE_PATTERN}
 										placeholder="请输入邀请码"
 										required
 										type="text"

@@ -17,12 +17,18 @@ import {
 	SidebarMenuItem,
 } from "@repo/ui/components/sidebar";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { CreditCardIcon, LayoutDashboardIcon, TicketIcon } from "lucide-react";
+import {
+	CreditCardIcon,
+	LayoutDashboardIcon,
+	SettingsIcon,
+	TicketIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const navItems = [
 	{ title: "仪表盘", to: "/", icon: LayoutDashboardIcon },
 	{ title: "邀请码", to: "/invitations", icon: TicketIcon },
+	{ title: "设置", to: "/settings", icon: SettingsIcon },
 ] as const;
 
 function AppNavUser() {

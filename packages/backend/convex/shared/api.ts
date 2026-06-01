@@ -21,6 +21,10 @@ export const api = {
     signIn: createApiLeaf<"mutation", typeof import("../functions/session").signIn>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signIn>("session:signIn"), { type: "mutation" }),
     signOut: createApiLeaf<"mutation", typeof import("../functions/session").signOut>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signOut>("session:signOut"), { type: "mutation" }),
   },
+  settings: {
+    getRegistrationSettings: createApiLeaf<"query", typeof import("../functions/settings").getRegistrationSettings>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/settings").getRegistrationSettings>("settings:getRegistrationSettings"), { type: "query" }),
+    setRequireInvitationCode: createApiLeaf<"mutation", typeof import("../functions/settings").setRequireInvitationCode>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/settings").setRequireInvitationCode>("settings:setRequireInvitationCode"), { type: "mutation" }),
+  },
   signup: {
     signUpWithInvitation: createApiLeaf<"mutation", typeof import("../functions/signup").signUpWithInvitation>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/signup").signUpWithInvitation>("signup:signUpWithInvitation"), { type: "mutation" }),
   },

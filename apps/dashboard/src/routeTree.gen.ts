@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as PublicAuthRouteImport } from './routes/_public/auth'
 import { Route as PublicAccessDeniedRouteImport } from './routes/_public/access-denied'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedInvitationsIndexRouteImport } from './routes/_authenticated/invitations/index'
 
 const PublicRoute = PublicRouteImport.update({
@@ -39,6 +40,12 @@ const PublicAccessDeniedRoute = PublicAccessDeniedRouteImport.update({
   path: '/access-denied',
   getParentRoute: () => PublicRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedInvitationsIndexRoute =
   AuthenticatedInvitationsIndexRouteImport.update({
     id: '/invitations/',
@@ -51,12 +58,14 @@ export interface FileRoutesByFullPath {
   '/access-denied': typeof PublicAccessDeniedRoute
   '/auth': typeof PublicAuthRoute
   '/invitations/': typeof AuthenticatedInvitationsIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/access-denied': typeof PublicAccessDeniedRoute
   '/auth': typeof PublicAuthRoute
   '/invitations': typeof AuthenticatedInvitationsIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -66,12 +75,13 @@ export interface FileRoutesById {
   '/_public/auth': typeof PublicAuthRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/invitations/': typeof AuthenticatedInvitationsIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/access-denied' | '/auth' | '/invitations/'
+  fullPaths: '/' | '/access-denied' | '/auth' | '/invitations/' | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/access-denied' | '/auth' | '/invitations'
+  to: '/' | '/access-denied' | '/auth' | '/invitations' | '/settings'
   id:
     | '__root__'
     | '/_authenticated'
@@ -80,6 +90,7 @@ export interface FileRouteTypes {
     | '/_public/auth'
     | '/_authenticated/'
     | '/_authenticated/invitations/'
+    | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,6 +135,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicAccessDeniedRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/invitations/': {
       id: '/_authenticated/invitations/'
       path: '/invitations'
@@ -137,11 +155,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedInvitationsIndexRoute: typeof AuthenticatedInvitationsIndexRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedInvitationsIndexRoute: AuthenticatedInvitationsIndexRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
