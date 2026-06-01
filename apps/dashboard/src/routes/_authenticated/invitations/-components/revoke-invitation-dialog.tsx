@@ -47,8 +47,8 @@ export function RevokeInvitationDialog({
 					<LoadingButton
 						data-slot="alert-dialog-action"
 						loading={isPending}
-						loadingText="撤销中…"
 						onClick={onConfirm}
+						variant={"destructive"}
 					>
 						确认撤销
 					</LoadingButton>

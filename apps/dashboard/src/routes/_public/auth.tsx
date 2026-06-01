@@ -158,7 +158,6 @@ function AuthPage() {
 						className="w-full"
 						form="auth-form"
 						loading={signIn.isPending}
-						loadingText="处理中…"
 						type="submit"
 					>
 						登录
