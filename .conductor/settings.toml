@@ -1,0 +1,20 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Files to copy: Conductor copies gitignored files matching these globs into every
+# new workspace (replaces the old scripts/setup.sh symlink loop). ".env*" is
+# recursive (gitignore syntax), so all apps'/packages' .env.local + convex/.env
+# are picked up automatically — a new app's .env.local needs no change here.
+file_include_globs = ".env*"
+
+[scripts]
+setup = "bun i"
+run_mode = "concurrent"
+
+[scripts.run.dev]
+command = "bun run dev"
+default = true
+icon = "play"
+
+[prompts]
+create_pr = "By default, rename this branch before pushing or opening the PR — do not judge whether the current name is good enough. Conductor seeds every new workspace with a throwaway placeholder branch: a random city or word name, optionally with a `-vN` or `-<hash>` suffix (e.g. `montevideo-v1`, `atlanta`, `seoul-v1`, `yerevan`). Treat any name not derived from the actual diff as a placeholder that MUST be renamed; keep the current name only if it already follows the convention below AND specifically describes this change. New name format: `<type>/<short-kebab-summary>`, where `<type>` is one of feat, fix, chore, ci, docs, refactor, test and matches the Conventional-Commit type/scope of the change, and `<short-kebab-summary>` is a concise lowercase English kebab-case description (about 5-6 words max) — e.g. `fix/dashboard-footer-overflow`, `feat/export-drop-columns`, `chore/bump-runners-32vcpu`. Branch names are always English kebab-case even though your chat replies are in Simplified Chinese. Apply the rename with `git branch -m <new-name>` while checked out on the branch, BEFORE pushing, so the remote branch and PR are created with the correct name from the start. Safety guard: if the branch has already been pushed to origin or a PR already exists for it, do NOT rename (that would orphan the remote branch) — otherwise rename freely. Then push and open the PR with a Conventional-Commit title matching the branch."
+general = "Reply user in Simplified Chinese."
