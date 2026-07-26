@@ -171,12 +171,76 @@ test plan if the surface area is non-trivial.
 | 2026-05-05 | `zod`                      | 4.4.1    | 4.4.3    | web, dashboard, backend                 | `51f3644` |
 | 2026-05-05 | `react-resizable-panels`   | 4.10.0   | 4.11.0   | `@repo/ui`                              | `51f3644` |
 | 2026-05-05 | `turbo`                    | 2.9.6    | 2.9.8    | root                                    | `51f3644` |
+| 2026-07-26 | `kitcn`                    | 0.14.2   | 0.15.17  | all four workspaces                     | `33f3a3f` |
+| 2026-07-26 | `convex`                   | 1.37.0   | 1.42.3   | all four workspaces                     | `33f3a3f` |
+| 2026-07-26 | `hono`                     | 4.12.16  | 4.12.32  | `@repo/backend`                         | `33f3a3f` |
+| 2026-07-26 | `typescript`               | 5.9.3    | 6.0.3    | all six workspaces                      | `33f3a3f` |
+| 2026-07-26 | `@tanstack/react-router`   | 1.169.1  | 1.170.18 | web, dashboard                          | `33f3a3f` |
+| 2026-07-26 | `@tanstack/react-start`    | 1.167.62 | 1.168.32 | web, dashboard, app-convex, vite-preset | `33f3a3f` |
+| 2026-07-26 | `@tanstack/router-plugin`  | 1.167.32 | 1.168.23 | web, dashboard                          | `33f3a3f` |
+| 2026-07-26 | `@tanstack/react-query`    | 5.100.9  | 5.101.4  | web, dashboard, app-convex              | `33f3a3f` |
+| 2026-07-26 | `@tanstack/devtools-vite`  | 0.6.0    | 0.8.3    | `@repo/vite-preset`                     | `33f3a3f` |
+| 2026-07-26 | `vite`                     | 8.0.10   | 8.1.5    | web, dashboard, vite-preset             | `33f3a3f` |
+| 2026-07-26 | `vitest`                   | 4.1.5    | 4.1.10   | web, dashboard                          | `33f3a3f` |
+| 2026-07-26 | `@cloudflare/vite-plugin`  | 1.39.0   | 1.47.0   | `@repo/vite-preset`                     | `33f3a3f` |
+| 2026-07-26 | `wrangler`                 | 4.95.0   | 4.114.0  | `@repo/vite-preset`                     | `33f3a3f` |
+| 2026-07-26 | `turbo`                    | 2.9.8    | 2.10.6   | root                                    | `33f3a3f` |
+| 2026-07-26 | `oxfmt`                    | 0.47.0   | 0.60.0   | root                                    | `33f3a3f` |
+| 2026-07-26 | `oxlint`                   | 1.62.0   | 1.75.0   | root                                    | `33f3a3f` |
+| 2026-07-26 | `oxlint-tsgolint`          | 0.22.1   | 7.0.2001 | root                                    | `33f3a3f` |
+| 2026-07-26 | `@base-ui/react`           | 1.4.1    | 1.6.0    | `@repo/ui`                              | `33f3a3f` |
+| 2026-07-26 | `tailwindcss`              | 4.2.4    | 4.3.3    | web, dashboard, ui, vite-preset         | `33f3a3f` |
+| 2026-07-26 | `shadcn`                   | 4.6.0    | 4.15.0   | `@repo/ui`                              | `33f3a3f` |
+| 2026-07-26 | `react-day-picker`         | 9.14.0   | 10.0.1   | `@repo/ui`                              | `33f3a3f` |
+| 2026-07-26 | `recharts`                 | 3.8.1    | 3.10.1   | `@repo/ui`                              | `33f3a3f` |
+| 2026-07-26 | `lucide-react`             | 1.14.0   | 1.27.0   | web, dashboard, ui                      | `33f3a3f` |
+| 2026-07-26 | `react` + `react-dom`      | 19.2.5   | 19.2.8   | web, dashboard, ui, app-convex          | `33f3a3f` |
+| 2026-07-26 | `@types/node`              | 25.6.0   | 26.1.1   | web, dashboard, app-convex              | `33f3a3f` |
 
-## Pending (audit 2026-05-05)
+Smaller same-range refreshes in the same commit: `@tanstack/react-devtools`
+0.10.2 → 0.10.9, `@tanstack/react-router-devtools` 1.166.13 → 1.167.0,
+`@tanstack/react-router-ssr-query` 1.166.12 → 1.167.1, `@vitejs/plugin-react`
+6.0.1 → 6.0.4, `react-resizable-panels` 4.11.0 → 4.12.2, `date-fns` 4.1.0 →
+4.4.0, `tailwind-merge` 3.5.0 → 3.6.0, `@fontsource-variable/geist` 5.2.8 →
+5.3.0, `@types/react` 19.2.14 → 19.2.17, `@faker-js/faker` 10.4.0 → 10.5.0.
+
+### Gotchas found in the 2026-07-26 audit
+
+- **`kitcn` ⇄ `convex` are now coupled.** kitcn 0.15.0 raised its `convex`
+  peer floor from `>=1.36` to `>=1.38`, so the two must move in the same
+  commit. Enforcement is warning-only (bun treats peer mismatches as
+  warnings), which makes it easy to miss.
+- **`typescript` was never actually blocked by kitcn.** The old Pending note
+  claimed kitcn's exact `typescript: "5.9.3"` pin blocked TS 6. It doesn't:
+  that's a `dependencies` entry, not a peer, so bun's isolated linker gives
+  kitcn its own private copy. Verified post-bump — kitcn resolves 5.9.3
+  while all six workspaces resolve 6.0.3, side by side. Check _how_ a pin is
+  declared before recording it as a blocker.
+- **`@tanstack/devtools-vite` 0.7.x is a trap.** 0.7.0/0.7.1 emit
+  syntactically invalid code when stripping this repo's
+  `{import.meta.env.DEV && (<TanStackDevtools/>)}`, breaking `vite build`.
+  Never land on a 0.7 floor; go straight to `^0.8`.
+- **`oxlint-tsgolint` uses offset versioning.** 0.22.1 → 7.0.2001 is not a
+  semver major — the `7.0.2` tracks the embedded TypeScript-Go release and
+  `001` is its patch counter. Pin with a tilde, not a caret, or it will
+  silently jump to a build targeting a different TypeScript minor. Skip
+  7.0.2000 entirely (its Go binary ships mode 0644 and cannot execute), and
+  always move it with `oxlint`, which declares `>=7.0.2001` as a peer.
+- **`bun update <pkg>` inside a workspace can _add_ dependencies.** Running
+  it for `react-dom`/`@types/react-dom` in `packages/app-convex` — which
+  depends on neither — added both to `dependencies`. This is a sibling of
+  the documented root-level footgun. Always `git diff` the manifests after
+  any `bun update`, not just the lockfile.
+- **Caret-satisfied packages don't move on `bun install`.** Anything already
+  inside its range (react, `@types/react`, vitest) stays at the locked
+  version; it needs an explicit `bun update` in the workspace directory.
+
+## Pending (audit 2026-07-26)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope              | Risk    | Notes                                                                                                             |
-| ------------ | ------- | ------ | ------------------ | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `typescript` | 5.9.3   | 6.0.3  | all six workspaces | blocked | `kitcn@0.14.2` still hard-pins `typescript: "5.9.3"` as a runtime `dependencies` entry — upstream must ship TS 6. |
+| Package      | Current | Latest | Scope              | Risk | Notes                                                                                                                                                                                      |
+| ------------ | ------- | ------ | ------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `typescript` | 6.0.3   | 7.0.2  | all six workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
+| `turbo`      | 2.10.6  | 2.10.7 | root               | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |
