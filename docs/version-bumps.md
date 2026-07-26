@@ -171,12 +171,14 @@ test plan if the surface area is non-trivial.
 | 2026-05-05 | `zod`                      | 4.4.1    | 4.4.3    | web, dashboard, backend                 | `51f3644` |
 | 2026-05-05 | `react-resizable-panels`   | 4.10.0   | 4.11.0   | `@repo/ui`                              | `51f3644` |
 | 2026-05-05 | `turbo`                    | 2.9.6    | 2.9.8    | root                                    | `51f3644` |
+| 2026-07-26 | `kitcn`                    | 0.14.2   | 0.15.17  | all four workspaces                     | `275e3bd` |
+| 2026-07-26 | `convex`                   | 1.37.0   | 1.42.3   | all four workspaces                     | `275e3bd` |
 
 ## Pending (audit 2026-05-05)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope              | Risk    | Notes                                                                                                             |
-| ------------ | ------- | ------ | ------------------ | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `typescript` | 5.9.3   | 6.0.3  | all six workspaces | blocked | `kitcn@0.14.2` still hard-pins `typescript: "5.9.3"` as a runtime `dependencies` entry — upstream must ship TS 6. |
+| Package      | Current | Latest | Scope              | Risk    | Notes                                                                                                              |
+| ------------ | ------- | ------ | ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `typescript` | 5.9.3   | 6.0.3  | all six workspaces | blocked | `kitcn@0.15.17` still hard-pins `typescript: "5.9.3"` as a runtime `dependencies` entry — upstream must ship TS 6. |
