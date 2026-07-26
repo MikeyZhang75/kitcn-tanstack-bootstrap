@@ -9,20 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as PublicAuthRouteImport } from './routes/_public/auth'
 import { Route as PublicAccessDeniedRouteImport } from './routes/_public/access-denied'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as PublicAuthRouteImport } from './routes/_public/auth'
 import { Route as AuthenticatedInvitationsIndexRouteImport } from './routes/_authenticated/invitations/index'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 
-const PublicRoute = PublicRouteImport.update({
-  id: '/_public',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PublicRoute = PublicRouteImport.update({
+  id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
@@ -30,26 +30,26 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const PublicAuthRoute = PublicAuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => PublicRoute,
-} as any)
 const PublicAccessDeniedRoute = PublicAccessDeniedRouteImport.update({
   id: '/access-denied',
   path: '/access-denied',
   getParentRoute: () => PublicRoute,
 } as any)
-const AuthenticatedSettingsIndexRoute =
-  AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+const PublicAuthRoute = PublicAuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => PublicRoute,
+} as any)
 const AuthenticatedInvitationsIndexRoute =
   AuthenticatedInvitationsIndexRouteImport.update({
     id: '/invitations/',
     path: '/invitations/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 
@@ -100,18 +100,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_public': {
-      id: '/_public'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof PublicRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_public': {
+      id: '/_public'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof PublicRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -121,13 +121,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_public/auth': {
-      id: '/_public/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof PublicAuthRouteImport
-      parentRoute: typeof PublicRoute
-    }
     '/_public/access-denied': {
       id: '/_public/access-denied'
       path: '/access-denied'
@@ -135,18 +128,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicAccessDeniedRouteImport
       parentRoute: typeof PublicRoute
     }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/settings'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/_public/auth': {
+      id: '/_public/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof PublicAuthRouteImport
+      parentRoute: typeof PublicRoute
     }
     '/_authenticated/invitations/': {
       id: '/_authenticated/invitations/'
       path: '/invitations'
       fullPath: '/invitations/'
       preLoaderRoute: typeof AuthenticatedInvitationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
   }
