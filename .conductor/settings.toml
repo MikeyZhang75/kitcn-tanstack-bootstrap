@@ -1,7 +1,7 @@
 "$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
 
 # Files to copy: Conductor copies gitignored files matching these globs into every
-# new workspace (replaces the old scripts/setup.sh symlink loop). ".env*" is
+# new workspace (replaced the old setup-script symlink loop). ".env*" is
 # recursive (gitignore syntax), so all apps'/packages' .env.local + convex/.env
 # are picked up automatically — a new app's .env.local needs no change here.
 file_include_globs = ".env*"
