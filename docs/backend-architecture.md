@@ -4,7 +4,7 @@
 
 **Working with kitcn? Never assume — check first.** kitcn is a young library and its CLI has non-obvious defaults (the deploy/migrate/aggregate target asymmetry below is one example). Before claiming how kitcn behaves, advising a command invocation, or interpreting a builder API, consult in this order:
 
-1. **Bundled skill docs**: `packages/backend/node_modules/kitcn/skills/convex/SKILL.md` and the `references/` tree beside it — these ship with the installed version, so they match the version pinned in `packages/backend/package.json` exactly, not some newer or older release.
+1. **Bundled skill docs**: `packages/backend/node_modules/kitcn/skills/kitcn/SKILL.md` and the `references/` tree beside it — these ship with the installed version, so they match the version pinned in `packages/backend/package.json` exactly, not some newer or older release.
 2. **Official docs**: <https://kitcn.dev> for CLI, ORM, migrations, aggregate, RLS.
 3. **Context7 MCP**: library ID `kitcn` — useful for API-level questions that aren't yet in the shipped skill docs.
 4. **Source code**: `packages/backend/node_modules/kitcn/dist/` (cli.mjs, backend-core, orm/index.js) when steps 1–3 don't answer the question — especially for CLI flag behavior and internal mutation semantics.
