@@ -171,8 +171,11 @@ test plan if the surface area is non-trivial.
 | 2026-05-05 | `zod`                      | 4.4.1    | 4.4.3    | web, dashboard, backend                 | `51f3644` |
 | 2026-05-05 | `react-resizable-panels`   | 4.10.0   | 4.11.0   | `@repo/ui`                              | `51f3644` |
 | 2026-05-05 | `turbo`                    | 2.9.6    | 2.9.8    | root                                    | `51f3644` |
-| 2026-07-26 | `kitcn`                    | 0.14.2   | 0.15.17  | all four workspaces                     | `33f3a3f` |
-| 2026-07-26 | `convex`                   | 1.37.0   | 1.42.3   | all four workspaces                     | `33f3a3f` |
+| 2026-07-26 | `kitcn`                    | 0.14.2   | 0.15.17  | all four workspaces                     | `275e3bd` |
+| 2026-07-26 | `convex`                   | 1.37.0   | 1.42.3   | all four workspaces                     | `275e3bd` |
+| 2026-07-26 | `react-day-picker`         | 9.14.0   | 10.0.1   | `@repo/ui`                              | `d33a66c` |
+| 2026-07-26 | `@shadcn/react`            | —        | 0.2.1    | `@repo/ui` (new dep)                    | `d33a66c` |
+| 2026-07-26 | `vaul`                     | 1.1.2    | —        | `@repo/ui` (removed)                    | `d33a66c` |
 | 2026-07-26 | `hono`                     | 4.12.16  | 4.12.32  | `@repo/backend`                         | `33f3a3f` |
 | 2026-07-26 | `typescript`               | 5.9.3    | 6.0.3    | all six workspaces                      | `33f3a3f` |
 | 2026-07-26 | `@tanstack/react-router`   | 1.169.1  | 1.170.18 | web, dashboard                          | `33f3a3f` |
@@ -191,11 +194,31 @@ test plan if the surface area is non-trivial.
 | 2026-07-26 | `@base-ui/react`           | 1.4.1    | 1.6.0    | `@repo/ui`                              | `33f3a3f` |
 | 2026-07-26 | `tailwindcss`              | 4.2.4    | 4.3.3    | web, dashboard, ui, vite-preset         | `33f3a3f` |
 | 2026-07-26 | `shadcn`                   | 4.6.0    | 4.15.0   | `@repo/ui`                              | `33f3a3f` |
-| 2026-07-26 | `react-day-picker`         | 9.14.0   | 10.0.1   | `@repo/ui`                              | `33f3a3f` |
 | 2026-07-26 | `recharts`                 | 3.8.1    | 3.10.1   | `@repo/ui`                              | `33f3a3f` |
 | 2026-07-26 | `lucide-react`             | 1.14.0   | 1.27.0   | web, dashboard, ui                      | `33f3a3f` |
 | 2026-07-26 | `react` + `react-dom`      | 19.2.5   | 19.2.8   | web, dashboard, ui, app-convex          | `33f3a3f` |
 | 2026-07-26 | `@types/node`              | 25.6.0   | 26.1.1   | web, dashboard, app-convex              | `33f3a3f` |
+
+The three `@repo/ui` rows tagged `d33a66c` came from a `shadcn` registry
+refresh, not a manual audit — the CLI rewrites `packages/ui/package.json` pins
+as a side effect of regenerating components (see
+[ui-components.md](ui-components.md)). Notes:
+
+- `react-day-picker` 9 → 10: the base-nova `calendar` registry item asks for
+  `react-day-picker@latest`, so the major floated in. v10 drops the
+  deprecated classname-alias layer (the CLI renamed `calendar.tsx`'s `table`
+  key to `month_grid`) and the non-Gregorian subpaths, which removed the
+  `@tabby_ai/hijri-converter` and `date-fns-jalali` transitives from the
+  lockfile. Neither app imports `calendar.tsx`, so there is no runtime
+  exposure today. The audit behind `33f3a3f` reached the same rename
+  independently, so the two landed identical `calendar.tsx` edits.
+- `vaul` removed because `drawer.tsx` was rewritten onto
+  `@base-ui/react/drawer`; nothing in the repo imports `vaul` anymore.
+- `recharts` was held at 3.8.1 by `d33a66c`, because the `chart` registry item
+  hard-pins 3.8.0 and would have reverted the 3.8.1 bump logged under
+  `b88d364`. `33f3a3f` then bumped it forward to 3.10.1 on the strength of a
+  changelog audit — hence the row above. Re-running `shadcn add chart` will
+  try to drag it back to 3.8.0 again; restore the pin afterwards.
 
 Smaller same-range refreshes in the same commit: `@tanstack/react-devtools`
 0.10.2 → 0.10.9, `@tanstack/react-router-devtools` 1.166.13 → 1.167.0,
