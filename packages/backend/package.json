@@ -16,13 +16,13 @@
 	"dependencies": {
 		"@noble/hashes": "2.2.0",
 		"convex": "1.42.3",
-		"hono": "4.12.16",
+		"hono": "4.12.32",
 		"kitcn": "0.15.17",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@repo/typescript-config": "workspace:*",
 		"@types/bun": "latest",
-		"typescript": "^5.7.2"
+		"typescript": "^6.0.3"
 	}
 }
