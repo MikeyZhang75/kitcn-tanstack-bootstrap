@@ -15,9 +15,9 @@
 	},
 	"dependencies": {
 		"@noble/hashes": "2.2.0",
-		"convex": "1.37.0",
+		"convex": "1.42.3",
 		"hono": "4.12.16",
-		"kitcn": "0.14.2",
+		"kitcn": "0.15.17",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
