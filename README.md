@@ -45,18 +45,14 @@ bunx convex dev --once
 
 This walks you through Convex login + project creation and writes `CONVEX_DEPLOYMENT` + `CONVEX_URL` to `packages/backend/.env.local`. Note the deployment URL; you'll wire it into the frontend next.
 
-### 3. Set Convex runtime env vars
-
-These are read by `getEnv()` inside Convex functions (`packages/backend/convex/lib/get-env.ts`) at runtime, so they live on the deployment, not in a local file:
+### 3. Push the backend to your deployment
 
 ```bash
 # from packages/backend/
-bunx convex env set DEPLOY_ENV development
-bunx convex env set SITE_URLS "https://web.localhost,https://dashboard.localhost"
 bunx kitcn dev --once
 ```
 
-`bunx kitcn dev --once` pushes the schema + functions to your new deployment. There are no auth secrets to provision — the app uses its own session-token system (scrypt password hashing in Convex), not Better Auth or JWTs.
+`bunx kitcn dev --once` pushes the schema + functions to your new deployment. There are no runtime env vars or auth secrets to provision — the app uses its own session-token system (scrypt password hashing in Convex), not Better Auth or JWTs.
 
 ### 4. Configure frontend env files
 
