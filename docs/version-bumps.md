@@ -198,6 +198,8 @@ test plan if the surface area is non-trivial.
 | 2026-07-26 | `lucide-react`             | 1.14.0   | 1.27.0   | web, dashboard, ui                      | `33f3a3f` |
 | 2026-07-26 | `react` + `react-dom`      | 19.2.5   | 19.2.8   | web, dashboard, ui, app-convex          | `33f3a3f` |
 | 2026-07-26 | `@types/node`              | 25.6.0   | 26.1.1   | web, dashboard, app-convex              | `33f3a3f` |
+| 2026-08-17 | `kitcn`                    | 0.15.17  | 0.17.4   | all four workspaces                     | `abcd641` |
+| 2026-08-17 | `convex`                   | 1.42.3   | 1.44.0   | all four workspaces                     | `abcd641` |
 | 2026-08-17 | `antd`                     | —        | 6.6.0    | web, dashboard (new dep)                | —         |
 | 2026-08-17 | `@ant-design/icons`        | —        | 6.3.2    | web, dashboard (new dep)                | —         |
 | 2026-08-17 | `@repo/ui` (whole package) | —        | —        | deleted                                 | —         |
@@ -207,15 +209,17 @@ test plan if the surface area is non-trivial.
 | 2026-08-17 | `sonner`                   | 2.0.7    | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `@tanstack/react-table`    | 8.21.3   | —        | web, dashboard (removed)                | —         |
 
-The 2026-08-17 rows are the **shadcn → Ant Design migration**, not a routine
-bump: `packages/ui` was deleted outright and both apps now depend on `antd` +
-`@ant-design/icons` directly. That also dropped every dependency that only
-existed to serve shadcn primitives (`@base-ui/react`, `@shadcn/react`, `shadcn`,
-`class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css`, `cmdk`,
-`date-fns`, `embla-carousel-react`, `input-otp`, `next-themes`,
-`react-day-picker`, `react-resizable-panels`, `recharts`,
-`@fontsource-variable/geist`) — they went with the package, so they get no
-individual rows. Notes for future bumps:
+Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
+(`abcd641`) are a routine coupled bump — notes for those are in the section
+below. Everything from `antd` down is the **shadcn → Ant Design migration**,
+which is not a bump at all: `packages/ui` was deleted outright and both apps
+now depend on `antd` + `@ant-design/icons` directly. That also dropped every
+dependency that only existed to serve shadcn primitives (`@base-ui/react`,
+`@shadcn/react`, `shadcn`, `class-variance-authority`, `clsx`,
+`tailwind-merge`, `tw-animate-css`, `cmdk`, `date-fns`,
+`embla-carousel-react`, `input-otp`, `next-themes`, `react-day-picker`,
+`react-resizable-panels`, `recharts`, `@fontsource-variable/geist`) — they
+went with the package, so they get no individual rows. Notes for future bumps:
 
 - **`antd` and `@ant-design/icons` move together.** antd 6 requires icons >= 6,
   and icons 6 is not compatible with antd 5. Bump both in the same commit.
@@ -283,12 +287,48 @@ Smaller same-range refreshes in the same commit: `@tanstack/react-devtools`
   inside its range (react, `@types/react`, vitest) stays at the locked
   version; it needs an explicit `bun update` in the workspace directory.
 
+### Notes on the 2026-08-17 kitcn/convex bump
+
+kitcn 0.16.0 raised the `convex` peer floor from `>=1.38` to `>=1.42` and it
+stays open-ended at `>=1.42` in 0.17.4, so convex went to `latest` (1.44.0).
+The two still move together — keep bumping them in one commit.
+
+kitcn 0.17.0 carried five breaking changes. Four don't touch this repo (no
+RLS policies, no `Ratelimit`, no `.withIndex()`, no cursor pagination —
+`invitations.list` is offset-based and orders by `createdAt`, which aliases
+Convex's `_creationTime` and is led by the default index). The two that could
+have:
+
+- **Middleware `next()` now wraps the handler**, and a `ctx` mutated on the
+  return path no longer reaches it. `convex/lib/crpc.ts` already passed
+  identity forward as `next({ ctx: { ...ctx, user } })`, so `authQuery` /
+  `authMutation` were already on the new contract.
+- **Chained `.input()` applies each schema separately** instead of flattening
+  them. The auth builders stack `z.object({ sessionToken })` under each
+  procedure's own schema; `parseInput` in kitcn's builder partitions keys by
+  declaring schema and merges the results, and no key is declared twice, so
+  `sessionToken` still reaches the middleware. Note the merge reads
+  `schema.shape` — an `.input()` argument wrapped in a top-level `.refine()`
+  would have no `.shape`. Every schema in `shared/tables/` is a plain
+  `z.object`, so nothing was affected, but a future object-level refinement
+  needs verifying against that code path.
+
+Regenerated output moved for two independent reasons, both benign: convex
+1.44.0 adds a typed `env` export to `_generated/server`, and kitcn 0.17.1
+stopped emitting the unused `api` type import into
+`generated/server.runtime.ts` (it only references `internal`).
+
+`apps/web`'s `bun run test` fails with `ReferenceError: module is not defined`
+from the Cloudflare workers pool. Verified pre-existing by stashing the bump
+and re-installing — it fails identically at 0.15.17/1.42.3, and there are no
+test files in either app. Unrelated to this bump; CI doesn't run it.
+
 ## Pending (audit 2026-07-26)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope              | Risk | Notes                                                                                                                                                                                      |
-| ------------ | ------- | ------ | ------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `typescript` | 6.0.3   | 7.0.2  | all six workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
-| `turbo`      | 2.10.6  | 2.10.7 | root               | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |
+| Package      | Current | Latest | Scope               | Risk | Notes                                                                                                                                                                                      |
+| ------------ | ------- | ------ | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `typescript` | 6.0.3   | 7.0.2  | all five workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
+| `turbo`      | 2.10.6  | 2.10.7 | root                | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |
