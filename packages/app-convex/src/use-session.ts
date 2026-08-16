@@ -2,10 +2,9 @@
 
 import type { UserRole } from "@repo/backend/shared/tables/user";
 import { useQuery } from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
 
-import { useCRPC } from "./crpc";
-import { getSessionToken, subscribeSessionToken } from "./session-store";
+import { useAuthedCRPC } from "./use-authed-crpc";
+import { useSessionToken } from "./use-session-token";
 
 export type SessionUser = {
 	id: string;
@@ -14,35 +13,21 @@ export type SessionUser = {
 	role: UserRole;
 };
 
-// Reactive read of the localStorage session token. `useSyncExternalStore`
-// subscribes to same-tab + cross-tab changes (see session-store.ts) so any
-// sign-in / sign-out re-renders consumers immediately. SSR snapshot is `null`
-// (no localStorage on the server) — moot in SPA mode, safe regardless.
-export function useSessionToken(): string | null {
-	return useSyncExternalStore(
-		subscribeSessionToken,
-		getSessionToken,
-		() => null,
-	);
-}
-
 // Current identity for UI (the sidebar user menu). Runs the `session.me` query
-// with the localStorage token; skipped entirely when there is no token. This
-// is read-only UI state — the authoritative role gate lives in the route
-// `beforeLoad`, not here.
+// through the authed proxy, which threads the token and — when there is none —
+// hands back `enabled: false`, so the "skip while signed out" behavior is now
+// the proxy's job rather than a hand-written guard here. This is read-only UI
+// state; the authoritative role gate lives in the `_authenticated` layout.
 export function useSession(): {
 	sessionToken: string | null;
 	user: SessionUser | null;
 	isPending: boolean;
 	isAuthenticated: boolean;
 } {
-	const crpc = useCRPC();
+	const authed = useAuthedCRPC();
 	const sessionToken = useSessionToken();
 
-	const query = useQuery({
-		...crpc.session.me.queryOptions({ sessionToken: sessionToken ?? "" }),
-		enabled: sessionToken != null,
-	});
+	const query = useQuery(authed.session.me.queryOptions());
 
 	const user = (query.data?.data?.user ?? null) as SessionUser | null;
 

@@ -10,6 +10,8 @@
 		"./crpc": "./src/crpc.tsx",
 		"./session-store": "./src/session-store.ts",
 		"./use-session": "./src/use-session.ts",
+		"./use-session-token": "./src/use-session-token.ts",
+		"./use-authed-crpc": "./src/use-authed-crpc.ts",
 		"./use-auth": "./src/use-auth.ts"
 	},
 	"scripts": {

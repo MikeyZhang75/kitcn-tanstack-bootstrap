@@ -1,8 +1,7 @@
 "use client";
 
-import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
-import { useSessionToken } from "@repo/app-convex/use-session";
+import { useAuthedCRPC } from "@repo/app-convex/use-authed-crpc";
 import {
 	createInvitationInputSchema,
 	DEFAULT_INVITATION_CREATE_COUNT,
@@ -37,9 +36,8 @@ const countRule: FormRule = {
 export function CreateInvitationDialog({
 	onCreated,
 }: CreateInvitationDialogProps) {
-	const crpc = useCRPC();
+	const crpc = useAuthedCRPC();
 	const { message } = App.useApp();
-	const sessionToken = useSessionToken() ?? "";
 	const [open, setOpen] = useState(false);
 	const [form] = Form.useForm<CreateInvitationValues>();
 
@@ -47,7 +45,7 @@ export function CreateInvitationDialog({
 
 	const handleFinish = (values: CreateInvitationValues) => {
 		createMutation.mutate(
-			{ count: values.count, sessionToken },
+			{ count: values.count },
 			{
 				onSuccess: (response) => {
 					const { codes } = response.data;

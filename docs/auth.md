@@ -129,14 +129,59 @@ resolve the session via an internal caller). Nothing needs that today.
 - `session-store.ts` — `getSessionToken` / `setSessionToken` / `clearSessionToken`
   over `localStorage` (key `app.session_token`) + `subscribeSessionToken` (custom
   same-tab event + cross-tab `storage` event).
-- `use-session.ts` — `useSessionToken()` (`useSyncExternalStore`, reactive) and
-  `useSession()` (runs `session.me` with the token; `enabled` only when a token
-  exists) returning `{ sessionToken, user, isPending, isAuthenticated }`.
+- `use-session-token.ts` — `useSessionToken()` (`useSyncExternalStore`,
+  reactive). Its own module rather than part of `use-session.ts` because
+  `use-authed-crpc.ts` needs it and `use-session.ts` consumes _that_ — splitting
+  it is what breaks the import cycle.
+- `use-session.ts` — `useSession()` (runs `session.me` through the authed proxy)
+  returning `{ sessionToken, user, isPending, isAuthenticated }`.
 - `use-auth.ts` — `useSignIn` / `useSignUp` (store the returned token on success)
   and `useSignOut` (revoke via the vanilla cRPC client, then clear the token).
   These replace the old per-app `auth-client.ts` (deleted). `web` uses all three;
   `dashboard` uses sign-in + sign-out (no self-signup).
-- Authed call sites thread the token: `crpc.X.queryOptions({ ...args, sessionToken })`.
+- `use-authed-crpc.ts` + `authed-crpc-proxy.ts` — **how authed call sites get
+  the token.** See below.
+
+##### `useAuthedCRPC()` — the token never appears at a call site
+
+`sessionToken` is a transport detail of the auth builders, not something route
+code should re-spread into every argument object. `useAuthedCRPC()` returns the
+same cRPC proxy with the token injected at the boundary and the field **erased
+from the argument types**:
+
+```tsx
+const authed = useAuthedCRPC();
+useQuery(authed.invitations.list.queryOptions({ page, pageSize })); // no token
+const revoke = useMutation(authed.invitations.revoke.mutationOptions());
+revoke.mutate({ id }); // no token
+```
+
+- **Types** (`use-authed-crpc.ts`): `StripSessionToken<Api>` walks the generated
+  api and rebuilds each `FunctionReference` with `sessionToken` dropped from
+  `_args`; the result is fed back through kitcn's own `CRPCClient` mapping, so
+  the decorators stay in lock-step with the installed kitcn. It must **rebuild**
+  the reference via `infer` — `Omit<leaf, "_args">` collapses to a bare index
+  signature (kitcn's leaf meta carries `[key: string]: unknown`, so `keyof leaf`
+  is `string | number`), which erases `_type` and makes the leaf map to `never`.
+- **Runtime** (`authed-crpc-proxy.ts`): a recursive `Proxy` that injects the
+  token into the args of `queryOptions` / `staticQueryOptions` /
+  `infiniteQueryOptions` / `queryKey` / `queryFilter` / `infiniteQueryKey`, and
+  wraps `mutationOptions`'s `mutationFn` (wrapping the fn — rather than
+  pre-binding args — keeps the `variables` handed to `onMutate` / `onSuccess` /
+  `onError` equal to what the caller passed to `.mutate()`). `skipToken` passes
+  through untouched. Signed out, query options come back `enabled: false`, which
+  is what replaced the hand-written `enabled: sessionToken != null` guards.
+  Dispatch is **by method name, not `typeof`**: kitcn builds its tree as
+  `new Proxy(() => {}, …)`, so intermediate namespace nodes also report as
+  `"function"`.
+- **Public procedures keep using plain `useCRPC()`.** Convex validates procedure
+  args strictly, so injecting `sessionToken` into a public procedure's input is
+  a runtime error — and nothing at runtime can tell the two apart (kitcn's
+  generated leaves only carry `{ type }` meta; the `auth` field comes from
+  kitcn's auth runtime, which is disabled here). `dashboard`'s `/settings` is
+  the canonical example of a page holding both: `crpc` for the public
+  `settings.getRegistrationSettings` read, `authed` for the admin-only
+  `settings.setRequireInvitationCode` write.
 
 Each frontend app accepts **exactly one role**: `apps/web` allows only
 `role === "user"`, `apps/dashboard` only `role === "admin"`. Every other role
