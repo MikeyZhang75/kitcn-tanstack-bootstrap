@@ -1,5 +1,5 @@
 import type { TableColumnsType } from "antd";
-import { Typography } from "antd";
+import { Flex, Typography } from "antd";
 
 import type { InvitationRow } from "../-model/invitation-row";
 import { InvitationRowActions } from "./invitation-row-actions";
@@ -20,8 +20,13 @@ export function createInvitationsColumns(options: {
 		{
 			dataIndex: "code",
 			key: "code",
+			// 复制按钮紧跟在码后面：不传 children 时 antd 只渲染图标按钮（并自带
+			// 复制成功后的 ✓ 状态与 4px 间距），提示文案由 zh_CN locale 提供。
 			render: (_value, row) => (
-				<Typography.Text code>{row.code}</Typography.Text>
+				<Flex align="center" wrap={false} gap={"small"}>
+					<Typography.Text code>{row.code}</Typography.Text>
+					<Typography.Text copyable={{ text: row.code }} />
+				</Flex>
 			),
 			title: "邀请码",
 		},
