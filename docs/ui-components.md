@@ -1,34 +1,129 @@
-### UI components (shadcn via kitcn)
+### UI components (Ant Design)
 
-shadcn primitives live in the `@repo/ui` workspace at `packages/ui/src/components/`, and both apps consume them as `@repo/ui/components/<name>` (e.g. `import { Button } from "@repo/ui/components/button"`). The `cn` helper is at `@repo/ui/lib/utils`, the `useIsMobile` hook at `@repo/ui/hooks/use-mobile`, and the Tailwind v4 globals stylesheet at `@repo/ui/styles/globals.css` — each app's `src/styles.css` is a one-liner `@import "@repo/ui/styles/globals.css";`, which pulls in `tailwindcss`, `tw-animate-css`, `shadcn/tailwind.css`, `@fontsource-variable/geist`, the app's CSS custom properties, and the `@source "../components"` / `@source "../hooks"` / `@source "../lib"` directives so Tailwind v4 scans the package sources for class usage.
+The UI layer is **[Ant Design](https://ant.design) v6**, consumed directly from `antd` by both apps. There is no shared UI workspace: `packages/ui` (the old shadcn/base-ui package) was deleted, along with Tailwind, `lucide-react`, `sonner`, `@tanstack/react-table`, `class-variance-authority`, `clsx`, and `tailwind-merge`. Each app depends on exactly two UI packages:
 
-The package has its own `components.json` (aliases self-reference `@repo/ui/...`), its own `tsconfig.json` (extends `@repo/typescript-config/app.json`, overrides `types: []` to avoid pulling in `vite/client` since the package never runs Vite), and owns the dependencies that only shadcn components use (`@base-ui/react`, `@shadcn/react`, `@tanstack/react-table`, `class-variance-authority`, `clsx`, `cmdk`, `date-fns`, `embla-carousel-react`, `input-otp`, `react-day-picker`, `react-resizable-panels`, `recharts`, `tailwind-merge`, `tw-animate-css`, `next-themes`, `@fontsource-variable/geist`, `shadcn`). `@tanstack/react-table` is in this list because the shared `DataTable` lives in `@repo/ui` (see below) — apps still depend on it directly because route-level column definitions (e.g. `apps/dashboard/.../invitations/-components/invitations-columns.tsx`) import `ColumnDef` from it. Apps keep `lucide-react` and `sonner` as their own deps too because they're also imported outside the ui package (icons in sidebar/routes, `<Toaster>` in `providers.tsx`). `@shadcn/react` is shadcn's own headless-primitives package (one subpath export today, `@shadcn/react/message-scroller`) and is imported by exactly one primitive, `message-scroller.tsx`. `vaul` is **gone** — `drawer.tsx` now wraps `@base-ui/react/drawer`.
-
-`packages/ui/src/components/*.tsx` (top-level only) is ignored by both oxlint and oxfmt — **don't edit shadcn primitives directly**. Add new ones with `bunx shadcn@latest add <name>` from inside either `apps/web` or `apps/dashboard`; the CLI reads the app's `components.json` (whose `ui` alias now points to `@repo/ui/components`) and writes the file into `packages/ui/src/components/` automatically. The ignore is intentionally scoped to direct `*.tsx` children, so the `custom-ui/` subfolder (see below) is still linted/formatted. `packages/ui/src/{hooks,lib}` are ignored wholesale on the same rationale. Each app's `components.json` keeps `components: @/components` as the **app-level** components alias for non-shadcn route-level code; only the `ui`/`utils`/`lib`/`hooks` aliases redirect into `@repo/ui`.
-
-**`shadcn add` also rewrites `packages/ui/package.json` dependency pins — a component refresh is always _also_ a dependency bump.** Each registry item carries a `dependencies` array the CLI installs verbatim, and those pins don't respect what's already in the file: the `chart` item pins `recharts@3.8.0` (which silently reverted a logged `3.8.1` bump), `calendar` asks for `react-day-picker@latest` (which floated in a major), and `message-scroller` adds `@shadcn/react`. After any `shadcn add` / registry refresh, run `git diff -- packages/ui/package.json` and put every changed pin through the [version-bumps procedure](version-bumps.md) — read changelogs for majors, restore exact pins the CLI walked backwards, drop deps a rewritten component no longer imports (this is how `vaul` was orphaned when `drawer.tsx` moved to base-ui), and append a Completed row. Never assume the diff is source-only.
-
-**`packages/ui/src/components/` should only contain shadcn primitives.** First-party wrappers built on top of those primitives — `data-table.tsx`, `loading-button.tsx`, `nav-user.tsx`, etc. — live in `packages/ui/src/components/custom-ui/` and are imported as `@repo/ui/components/custom-ui/<name>`. Keeping the two surfaces separate means `bunx shadcn add` writes only to `components/`, never collides with custom code, and the lint/fmt ignore (which targets shadcn-generated files) doesn't accidentally swallow our hand-written wrappers. The rule of thumb for `custom-ui/`: "if both apps import it and it's pure UI (no app-specific imports), it belongs here." Wrappers that need app-specific imports (env, route-level state, per-app nav config) stay in `apps/<name>/src/components/` instead — the per-app `app-sidebar.tsx` is the canonical example: it carries each app's nav items + header title and composes `<NavUser>` from the pure `@repo/ui/components/custom-ui/nav-user` primitive.
-
-This project uses the **base-ui** variant of shadcn, not the Radix variant. Key API difference: there is **no `asChild` prop**. To render a custom element (e.g. a router `Link` inside a button), pass `render={<Link to="..." />}`:
-
-```tsx
-<SidebarMenuButton
-	isActive={pathname === item.to}
-	render={<Link to={item.to} />}
-	tooltip={item.title}
->
-	<item.icon />
-	<span>{item.title}</span>
-</SidebarMenuButton>
+```jsonc
+"antd": "^6.6.0",
+"@ant-design/icons": "^6.3.2"
 ```
 
-The sidebar layout pattern is in `apps/web/src/components/app-sidebar.tsx`. To add a navigation entry, extend the `navItems` array — the `_authenticated` layout picks it up automatically. `SidebarInset` is itself a `<main>` element, so pages under `_authenticated/` must **not** wrap their content in another `<main>`.
+Icons come from `@ant-design/icons` only — `lucide-react` is gone. `@ant-design/icons` must stay on `>= 6` (v5 icons are incompatible with `antd@6`); move the two together.
 
-### Shared first-party wrappers in `@repo/ui/components/custom-ui/`
+#### Styling model — no Tailwind, no utility classes
 
-Three first-party wrappers ship from `packages/ui/src/components/custom-ui/` and are imported by both apps:
+There is **no CSS framework and no `className` styling** in this repo. Layout and spacing are expressed with antd's own primitives; anything left over is an inline `style` object driven by theme tokens.
 
-- **`@repo/ui/components/custom-ui/loading-button`** exports `LoadingButton`, a thin wrapper around `Button` that accepts `loading?: boolean` and optional `loadingText`. When `loading` is true it renders `Spinner` with `data-icon="inline-start"` (so the button's padding variants pick it up automatically) and sets `disabled={disabled || loading}`. All other `Button` props pass through via `React.ComponentProps<typeof Button>`.
-- **`@repo/ui/components/custom-ui/data-table`** exports a generic `DataTable<TData>` component that encapsulates the grid-based table rendering pattern used across both apps (header/body layout, `size`-based column styling with fixed-width or flex-grow, empty-state row). The component owns its outer chrome — `rounded-md border` + `overflow-x-auto` container — so route wrappers no longer need to re-wrap it. Props: `data`, `columns` (TanStack Table `ColumnDef`), optional `bodyClassName` (e.g. `"grid max-h-[60vh] overflow-y-auto"` for scroll-constrained tables), `containerClassName` (escape hatch for the outer flex-col wrapper, e.g. `"min-w-0"`), `emptyText` (defaults to `"暂无数据"`), and an optional `pagination` object. When `pagination` is passed, `DataTable` renders a numbered pager below the table with a MUI-style stable-width page range (constant slot count so the pager doesn't reflow as you navigate), a page-size `Select` with Chinese labels, `共 N 条` total count, and `共 Y 页` mobile hint. `DataTablePagination` shape: `{ pageIndex, onPageChange, pageSize, onPageSizeChange, total, pageSizeOptions?, isFetching? }` — all wiring stays in the route so `DataTable` itself is data-source-agnostic (works with cursor pagination, offset pagination, or any client-side strategy that can surface a `total`).
-- **`@repo/ui/components/custom-ui/nav-user`** exports `NavUser`, the user-menu dropdown rendered in the sidebar footer. It's a pure UI component — `user: { displayName, image? } | null`, `isLoading?`, `isSigningOut?`, and `onSignOut` are passed in as props. Each app's `app-sidebar.tsx` owns a small `AppNavUser` helper that wires the shared `useSession()` + `useSignOut()` hooks (from `@repo/app-convex`) into `<NavUser>`; `app-sidebar.tsx` stays per-app only for its nav items + header title, while the UI/UX (avatar, initials, dropdown layout, "退出登录" copy) is shared.
+- `apps/*/src/styles.css` is just `@import "antd/dist/reset.css";` plus a `scrollbar-width: thin` rule. It's still injected as a `<link>` from `__root.tsx` via `import appCss from "../styles.css?url"`.
+- Component CSS is injected at runtime by antd's CSS-in-JS (`@ant-design/cssinjs`). Never hand-write component styles; there is nothing to override in `styles.css`.
+- Reach for `<Flex>` (`vertical`, `gap`, `align`, `justify`) and `<Layout>` instead of flex utility classes, and `<Typography.Title>` / `<Typography.Text type="secondary">` instead of text-size/color classes.
+- Colors, radii, and spacing come from `const { token } = theme.useToken()` — e.g. `token.colorSplit` for hairline borders, `token.colorBgContainer` for surfaces, `token.colorPrimary` for the brand mark. Don't hardcode hex values.
+- Theme changes belong in the single `ConfigProvider` in `components/providers.tsx`, not in per-component styles.
+
+Because antd v6 has CSS variables on by default, token reads are cheap and the runtime style hashing is much lighter than antd v5.
+
+#### Providers: `ConfigProvider` + `App`
+
+`apps/*/src/components/providers.tsx` is byte-identical across both apps:
+
+```tsx
+<ConfigProvider locale={zhCN}>
+	<AntdApp>
+		<AppConvexProvider>{children}</AppConvexProvider>
+	</AntdApp>
+</ConfigProvider>
+```
+
+- `locale={zhCN}` (`antd/locale/zh_CN`) is what makes Table pagination, Modal buttons, `Empty`, and `Select` speak Simplified Chinese without per-call-site strings.
+- `<App>` supplies the **context-aware** `message` / `notification` / `modal` instances. **Always** get them with `const { message } = App.useApp()` inside a component — never `import { message } from "antd"`. The static exports render outside the React tree, so they miss `ConfigProvider`'s theme and locale. This replaced sonner's `toast.*`; toasts are still the standard channel for surfacing mutation errors (don't render inline error text).
+
+#### Replacements for the deleted `@repo/ui` wrappers
+
+The three first-party wrappers that used to live in `@repo/ui/components/custom-ui/` are gone; antd covers all three natively:
+
+| Deleted wrapper                | Now                                                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `LoadingButton`                | `<Button loading={...}>` — built in                                                                            |
+| `DataTable` + `DataTablePager` | `<Table>` with the `pagination` prop (`showSizeChanger`, `showTotal`, `pageSizeOptions`)                       |
+| `NavUser`                      | `apps/*/src/components/nav-user.tsx` — per-app now, composed from `Dropdown` + `Avatar` + `Button type="text"` |
+
+`nav-user.tsx` is duplicated byte-for-byte across both apps (like `providers.tsx` and `_public.tsx` — see [frontend architecture](frontend-architecture.md)); **mirror any edit into both apps in the same commit.**
+
+#### Server-driven tables
+
+`<Table>` owns its pager, so route code no longer hand-rolls a page range. The wiring pattern (canonical example: `apps/dashboard/src/routes/_authenticated/invitations/-components/invitations-data-table.tsx`):
+
+- The route keeps a `useReducer` for `{ pageIndex, pageSize }` (the "changing page size resets page index" invariant still lives in `-model/invitations-pagination.ts`).
+- The table component converts between antd's 1-based `current` and the reducer's 0-based `pageIndex`.
+- antd fires `onChange(page, size)` for **both** page and page-size changes, so the handler must branch on whether `size` changed before dispatching — otherwise a size change is misread as a page jump:
+
+  ```tsx
+  onChange: (page, size) => {
+  	if (size !== pagination.pageSize) {
+  		pagination.onPageSizeChange(size);
+  		return;
+  	}
+  	pagination.onPageChange(page - 1);
+  };
+  ```
+
+- `total` comes from the separate `invitations.count` query; while it's `undefined`, pass `pagination={false}`.
+- `loading={query.isFetching}` plus `placeholderData: keepPreviousData` gives "previous rows under a spinner" instead of a flash of empty state.
+- Empty state text goes through `locale={{ emptyText: "暂无邀请码" }}`.
+
+#### Forms
+
+Forms use antd `Form` + `Form.Item` (the hand-rolled `useReducer` form state is gone). Validation rules are **derived from the backend zod schemas**, never re-declared:
+
+```tsx
+import { signInInputSchema } from "@repo/backend/shared/tables/user";
+
+import { zodStringRule } from "./-lib/zod-rule";
+
+<Form.Item
+	label="用户名"
+	name="username"
+	rules={[zodStringRule(signInInputSchema.shape.username)]}
+>
+	<Input autoComplete="username" placeholder="请输入用户名" />
+</Form.Item>;
+```
+
+`zodStringRule` (`apps/*/src/routes/_public/-lib/zod-rule.ts`, mirrored in both apps) wraps a `ZodType` in an antd `FormRule` validator and coerces `undefined → ""`, so the "field is empty" case also surfaces the schema's own Chinese message (e.g. 用户名至少 3 个字符) rather than antd's generic `required` template. This is the [one-source-of-truth rule](conventions.md) applied to forms: length/charset constraints and their messages are declared once, in `packages/backend/convex/shared/tables/*.ts`.
+
+Optional fields need a local variant that short-circuits on empty input before parsing — see `optionalCodeRule` in `invitations/-components/create-invitation-dialog.tsx`.
+
+#### The app shell
+
+`_authenticated.tsx` builds the shell from `Layout`:
+
+```tsx
+<Layout hasSider style={{ height: "100dvh" }}>
+	<AppSidebar collapsed={collapsed} collapsedWidth={isMobile ? 0 : 64} />
+	<Layout style={{ minWidth: 0 }}>
+		<Header>…collapse trigger…</Header>
+		<Content style={{ minHeight: 0, overflow: "auto", padding: 16 }}>
+			<Outlet />
+		</Content>
+	</Layout>
+</Layout>
+```
+
+Three things here are load-bearing — don't "clean them up":
+
+- **`hasSider` must be passed explicitly.** antd detects `Layout.Sider` by inspecting its direct children, and `AppSidebar` is a wrapper component, so auto-detection fails and the horizontal flex layout never gets applied.
+- **`height: "100dvh"` on the outer `Layout` + `minHeight: 0` / `overflow: auto` on `Content`** is what keeps long pages scrolling inside the content region. Drop either and you get the page-level scrollbar back alongside the content one.
+- **`collapsedWidth={isMobile ? 0 : 64}`**, driven by `Grid.useBreakpoint()` (`screens.lg === false`), is the responsive behavior: an icon rail on desktop, fully hidden on mobile. `useBreakpoint()` returns `{}` on the first frame, hence the explicit `=== false` comparison rather than `!screens.lg`.
+
+`app-sidebar.tsx` stays per-app (nav items + header title). Nav entries are a `navItems` array mapped into `Menu` `items` with `label: <Link to={item.to}>`; `selectedKeys={[pathname]}` drives the active state. When the `Sider` collapses, antd pushes `siderCollapsed` down through `SiderContext` and the `Menu` switches to icon mode with per-item tooltips automatically — don't set `inlineCollapsed` by hand.
+
+#### antd v6 API notes
+
+The repo targets v6, where a number of v5 props are deprecated (they still work but warn, and are slated for removal in v7):
+
+- `destroyOnClose` → `destroyOnHidden` (used by the create-invitation `Modal`)
+- `dropdownXxx` → `popupXxx` (`popupMatchSelectWidth`, `classNames.popup.root`, …)
+- `bordered` → `variant`; `bodyStyle` / `headStyle` → `styles.body` / `styles.header`
+- Size enums unified to `'large' | 'medium' | 'small'` — `middle` and `default` are deprecated
+- Children-based APIs replaced by `items` (`Menu`, `Tabs`, `Breadcrumb`, `Descriptions`, `Timeline`, `Anchor`)
+
+`@ant-design/v5-patch-for-react-19` is **not** needed — v6 supports React 19 natively.

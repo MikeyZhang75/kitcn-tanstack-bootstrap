@@ -3,15 +3,16 @@
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { useSessionToken } from "@repo/app-convex/use-session";
-import type { DataTablePagination } from "@repo/ui/components/custom-ui/data-table";
-import { Skeleton } from "@repo/ui/components/skeleton";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { App, Flex, Typography } from "antd";
 import { useCallback, useMemo, useReducer, useState } from "react";
-import { toast } from "sonner";
 
 import { CreateInvitationDialog } from "./-components/create-invitation-dialog";
-import { InvitationsDataTable } from "./-components/invitations-data-table";
+import {
+	InvitationsDataTable,
+	type InvitationsTablePagination,
+} from "./-components/invitations-data-table";
 import { RevokeInvitationDialog } from "./-components/revoke-invitation-dialog";
 import type { InvitationRow } from "./-model/invitation-row";
 import {
@@ -27,6 +28,7 @@ const DEFAULT_PAGE_SIZE = 20;
 
 function InvitationsPage() {
 	const crpc = useCRPC();
+	const { message } = App.useApp();
 	// All invitations procedures are admin-only; thread the session token from
 	// localStorage into every call (guaranteed present inside _authenticated).
 	const sessionToken = useSessionToken() ?? "";
@@ -38,10 +40,10 @@ function InvitationsPage() {
 	const { pageSize, pageIndex } = pagination;
 
 	// `keepPreviousData` holds the previous page in `pageQuery.data` while the
-	// next queryKey is fetching, so the table renders the prior rows instead
-	// of flashing empty during pagination. The server resolves each page in
-	// one offset-based index scan, so a jump from page 0 to page N is a
-	// single WS round-trip.
+	// next queryKey is fetching, so the table renders the prior rows (behind
+	// antd Table 的 loading 遮罩) instead of flashing empty during pagination.
+	// The server resolves each page in one offset-based index scan, so a jump
+	// from page 0 to page N is a single WS round-trip.
 	const pageQuery = useQuery({
 		...crpc.invitations.list.queryOptions({
 			page: pageIndex,
@@ -72,9 +74,6 @@ function InvitationsPage() {
 		[pageQuery.data],
 	);
 
-	const isLoadingFirstPage =
-		pageIndex === 0 && pageQuery.isPending && pageQuery.data == null;
-
 	const handlePageChange = useCallback(
 		(target: number) => {
 			if (target < 0) return;
@@ -93,26 +92,18 @@ function InvitationsPage() {
 		[],
 	);
 
-	const paginationProps: DataTablePagination | undefined = useMemo(
+	const paginationProps: InvitationsTablePagination | undefined = useMemo(
 		() =>
 			total != null
 				? {
 						pageIndex,
-						isFetching: pageQuery.isFetching,
 						onPageChange: handlePageChange,
 						pageSize,
 						onPageSizeChange: handlePageSizeChange,
 						total,
 					}
 				: undefined,
-		[
-			total,
-			pageIndex,
-			pageQuery.isFetching,
-			pageSize,
-			handlePageChange,
-			handlePageSizeChange,
-		],
+		[total, pageIndex, pageSize, handlePageChange, handlePageSizeChange],
 	);
 
 	const [revoking, setRevoking] = useState<InvitationRow | null>(null);
@@ -128,11 +119,11 @@ function InvitationsPage() {
 			{ id: revoking.id, sessionToken },
 			{
 				onSuccess: () => {
-					toast.success("邀请码已撤销");
+					message.success("邀请码已撤销");
 					setRevoking(null);
 				},
 				onError: (err) => {
-					toast.error(extractErrorMessage(err) ?? "撤销失败");
+					message.error(extractErrorMessage(err) ?? "撤销失败");
 				},
 			},
 		);
@@ -145,30 +136,25 @@ function InvitationsPage() {
 	};
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col gap-6">
-			<header className="flex items-start justify-between gap-4">
-				<div className="space-y-1">
-					<h1 className="text-2xl font-semibold tracking-tight">邀请码管理</h1>
-					<p className="text-muted-foreground text-sm">
+		<Flex gap={24} vertical>
+			<Flex align="flex-start" gap={16} justify="space-between">
+				<div>
+					<Typography.Title level={3} style={{ marginBlock: "0 4px" }}>
+						邀请码管理
+					</Typography.Title>
+					<Typography.Text type="secondary">
 						创建并管理用于注册的邀请码。
-					</p>
+					</Typography.Text>
 				</div>
 				<CreateInvitationDialog onCreated={handleCreated} />
-			</header>
+			</Flex>
 
-			{isLoadingFirstPage ? (
-				<div className="space-y-3">
-					<Skeleton className="h-10 w-full" />
-					<Skeleton className="h-10 w-full" />
-					<Skeleton className="h-10 w-full" />
-				</div>
-			) : (
-				<InvitationsDataTable
-					data={invitations}
-					onRevoke={handleRevoke}
-					pagination={paginationProps}
-				/>
-			)}
+			<InvitationsDataTable
+				data={invitations}
+				loading={pageQuery.isFetching}
+				onRevoke={handleRevoke}
+				pagination={paginationProps}
+			/>
 
 			<RevokeInvitationDialog
 				invitation={revoking}
@@ -178,6 +164,6 @@ function InvitationsPage() {
 					if (!next) setRevoking(null);
 				}}
 			/>
-		</div>
+		</Flex>
 	);
 }

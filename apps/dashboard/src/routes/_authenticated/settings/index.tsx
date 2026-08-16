@@ -3,19 +3,9 @@
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { useSessionToken } from "@repo/app-convex/use-session";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@repo/ui/components/card";
-import { Label } from "@repo/ui/components/label";
-import { Skeleton } from "@repo/ui/components/skeleton";
-import { Switch } from "@repo/ui/components/switch";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { App, Card, Flex, Skeleton, Switch, Typography } from "antd";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
 	component: SettingsPage,
@@ -23,6 +13,7 @@ export const Route = createFileRoute("/_authenticated/settings/")({
 
 function SettingsPage() {
 	const crpc = useCRPC();
+	const { message } = App.useApp();
 	const sessionToken = useSessionToken() ?? "";
 
 	// The read is public (no token); the toggle is admin-only and threads the
@@ -43,45 +34,46 @@ function SettingsPage() {
 		updateMutation.mutate(
 			{ requireInvitationCode: checked, sessionToken },
 			{
-				onSuccess: () => toast.success("已保存"),
-				onError: (err) => toast.error(extractErrorMessage(err) ?? "保存失败"),
+				onSuccess: () => message.success("已保存"),
+				onError: (err) => message.error(extractErrorMessage(err) ?? "保存失败"),
 			},
 		);
 	};
 
 	return (
-		<div className="flex flex-col gap-6">
-			<header className="space-y-1">
-				<h1 className="text-2xl font-semibold tracking-tight">设置</h1>
-				<p className="text-muted-foreground text-sm">管理注册与系统设置。</p>
-			</header>
+		<Flex gap={24} vertical>
+			<div>
+				<Typography.Title level={3} style={{ marginBlock: "0 4px" }}>
+					设置
+				</Typography.Title>
+				<Typography.Text type="secondary">管理注册与系统设置。</Typography.Text>
+			</div>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>注册设置</CardTitle>
-					<CardDescription>控制新用户如何注册账户。</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{settingsQuery.isPending ? (
-						<Skeleton className="h-10 w-full" />
-					) : (
-						<div className="flex items-center justify-between gap-4">
-							<div className="space-y-1">
-								<Label htmlFor="require-invitation-code">注册需要邀请码</Label>
-								<p className="text-muted-foreground text-sm">
-									开启后，新用户必须填写有效的邀请码才能注册；关闭后，任何人都可以直接注册。
-								</p>
-							</div>
-							<Switch
-								checked={requireInvitationCode ?? true}
-								disabled={updateMutation.isPending}
-								id="require-invitation-code"
-								onCheckedChange={handleToggle}
-							/>
+			<Card title="注册设置">
+				<Typography.Paragraph type="secondary">
+					控制新用户如何注册账户。
+				</Typography.Paragraph>
+				{settingsQuery.isPending ? (
+					<Skeleton active paragraph={{ rows: 1 }} title={false} />
+				) : (
+					<Flex align="center" gap={16} justify="space-between">
+						<div>
+							<Typography.Text strong>注册需要邀请码</Typography.Text>
+							<Typography.Paragraph
+								style={{ marginBottom: 0 }}
+								type="secondary"
+							>
+								开启后，新用户必须填写有效的邀请码才能注册；关闭后，任何人都可以直接注册。
+							</Typography.Paragraph>
 						</div>
-					)}
-				</CardContent>
+						<Switch
+							checked={requireInvitationCode ?? true}
+							loading={updateMutation.isPending}
+							onChange={handleToggle}
+						/>
+					</Flex>
+				)}
 			</Card>
-		</div>
+		</Flex>
 	);
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Each doc below is imported into context. Read the relevant one(s) based on the task before answering or editing.
 
-<!-- Monorepo layout: Turborepo + Bun workspaces (apps/web, apps/dashboard, packages/backend, packages/ui), root/per-workspace scripts, CI + Cloudflare Pages deploy pipeline. -->
+<!-- Monorepo layout: Turborepo + Bun workspaces (apps/web, apps/dashboard, packages/backend, packages/app-convex, packages/vite-preset), root/per-workspace scripts, CI + Cloudflare Workers deploy pipeline. -->
 
 @docs/monorepo-layout.md
 
@@ -20,7 +20,7 @@ Each doc below is imported into context. Read the relevant one(s) based on the t
 
 @docs/frontend-architecture.md
 
-<!-- UI components: `@repo/ui` workspace with shadcn primitives (base-ui variant, no `asChild`), `components/custom-ui/` wrappers, and the shared generic `DataTable` with numbered pagination. -->
+<!-- UI components: Ant Design v6 consumed directly from `antd` (no shared UI workspace, no Tailwind, no className styling) — `ConfigProvider`+`App` providers, `App.useApp()` for messages, `theme.useToken()` for styling, antd `Table`/`Form` patterns, and the `Layout` app shell. -->
 
 @docs/ui-components.md
 

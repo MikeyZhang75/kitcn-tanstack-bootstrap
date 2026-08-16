@@ -12,10 +12,10 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@ant-design/icons": "^6.3.2",
 		"@opentelemetry/api": "1.9.1",
 		"@repo/app-convex": "workspace:*",
 		"@repo/backend": "workspace:*",
-		"@repo/ui": "workspace:*",
 		"@t3-oss/env-core": "^0.13.11",
 		"@tanstack/react-devtools": "^0.10.9",
 		"@tanstack/react-query": "5.101.4",
@@ -23,16 +23,13 @@
 		"@tanstack/react-router-devtools": "^1.167.0",
 		"@tanstack/react-router-ssr-query": "^1.167.1",
 		"@tanstack/react-start": "^1.168.32",
-		"@tanstack/react-table": "^8.21.3",
 		"@tanstack/router-plugin": "^1.168.23",
+		"antd": "^6.6.0",
 		"convex": "1.42.3",
 		"kitcn": "0.15.17",
-		"lucide-react": "^1.27.0",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
-		"sonner": "^2.0.7",
 		"superjson": "^2.2.6",
-		"tailwindcss": "^4.3.3",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {

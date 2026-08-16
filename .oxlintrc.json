@@ -16,10 +16,7 @@
 		"**/routeTree.gen.ts",
 		"**/_generated",
 		"**/generated",
-		"**/shared/api.ts",
-		"packages/ui/src/components/*.tsx",
-		"packages/ui/src/hooks",
-		"packages/ui/src/lib"
+		"**/shared/api.ts"
 	],
 	"settings": {
 		"react": {

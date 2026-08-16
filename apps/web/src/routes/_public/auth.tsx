@@ -7,30 +7,20 @@ import { useSignIn, useSignUp } from "@repo/app-convex/use-auth";
 import {
 	INVITATION_CODE_MAX_LENGTH,
 	INVITATION_CODE_MIN_LENGTH,
-	INVITATION_CODE_PATTERN,
 } from "@repo/backend/shared/tables/invitations";
 import {
 	PASSWORD_MIN_LENGTH,
+	signInInputSchema,
+	signUpWithInvitationInputSchema,
 	USERNAME_MAX_LENGTH,
 	USERNAME_MIN_LENGTH,
-	USERNAME_PATTERN,
 } from "@repo/backend/shared/tables/user";
-import { Button } from "@repo/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@repo/ui/components/card";
-import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
-import { Field, FieldGroup, FieldLabel } from "@repo/ui/components/field";
-import { Input } from "@repo/ui/components/input";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { type SyntheticEvent, useReducer } from "react";
-import { toast } from "sonner";
+import { App, Button, Card, Flex, Form, Input, Typography } from "antd";
+import { useState } from "react";
+
+import { zodStringRule } from "./-lib/zod-rule";
 
 type AuthSearch = {
 	callbackUrl?: string;
@@ -38,42 +28,11 @@ type AuthSearch = {
 
 type AuthMode = "signin" | "signup";
 
-type AuthFormState = {
-	mode: AuthMode;
+type AuthFormValues = {
 	username: string;
 	password: string;
-	invitationCode: string;
+	invitationCode?: string;
 };
-
-type AuthFormAction =
-	| {
-			type: "set_field";
-			field: keyof Omit<AuthFormState, "mode">;
-			value: string;
-	  }
-	| { type: "toggle_mode" };
-
-const initialAuthForm: AuthFormState = {
-	mode: "signin",
-	username: "",
-	password: "",
-	invitationCode: "",
-};
-
-function authFormReducer(
-	state: AuthFormState,
-	action: AuthFormAction,
-): AuthFormState {
-	switch (action.type) {
-		case "set_field":
-			return { ...state, [action.field]: action.value };
-		case "toggle_mode":
-			return {
-				...state,
-				mode: state.mode === "signin" ? "signup" : "signin",
-			};
-	}
-}
 
 export const Route = createFileRoute("/_public/auth")({
 	validateSearch: (search: Record<string, unknown>): AuthSearch => ({
@@ -96,8 +55,9 @@ export const Route = createFileRoute("/_public/auth")({
 
 function AuthPage() {
 	const { callbackUrl } = Route.useSearch();
-	const [form, dispatchForm] = useReducer(authFormReducer, initialAuthForm);
-	const { mode, username, password, invitationCode } = form;
+	const { message } = App.useApp();
+	const [mode, setMode] = useState<AuthMode>("signin");
+	const [form] = Form.useForm<AuthFormValues>();
 
 	const signIn = useSignIn();
 	const signUp = useSignUp();
@@ -112,6 +72,9 @@ function AuthPage() {
 	const requireInvitationCode =
 		settingsQuery.data?.data?.requireInvitationCode ?? true;
 
+	const isSignUp = mode === "signup";
+	const isPending = signIn.isPending || signUp.isPending;
+
 	const onAuthSuccess = () => {
 		// Full-page navigation so the router rebuilds from scratch and re-runs
 		// every beforeLoad with the freshly stored token in localStorage.
@@ -119,22 +82,20 @@ function AuthPage() {
 	};
 
 	const notifyError = (error: unknown) => {
-		toast.error(extractErrorMessage(error) ?? "出现错误");
+		message.error(extractErrorMessage(error) ?? "出现错误");
 	};
 
-	const isPending = signIn.isPending || signUp.isPending;
-
-	function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
-		event.preventDefault();
-
-		if (mode === "signup") {
+	const handleFinish = (values: AuthFormValues) => {
+		if (isSignUp) {
 			signUp.mutate(
 				{
-					username,
-					password,
+					username: values.username,
+					password: values.password,
 					// Only send a code when one is required; otherwise omit it so the
 					// optional backend field stays undefined.
-					invitationCode: requireInvitationCode ? invitationCode : undefined,
+					invitationCode: requireInvitationCode
+						? values.invitationCode
+						: undefined,
 				},
 				{ onSuccess: onAuthSuccess, onError: notifyError },
 			);
@@ -142,120 +103,100 @@ function AuthPage() {
 		}
 
 		signIn.mutate(
-			{ username, password },
+			{ username: values.username, password: values.password },
 			{ onSuccess: onAuthSuccess, onError: notifyError },
 		);
-	}
+	};
+
+	// 校验规则一律从后端 procedure 的 input schema 上取字段，中文文案跟着 schema
+	// 走。登录态的密码只要求非空、注册态才有最短长度 —— 差异在 user.ts 里已经
+	// 解释过，这里只是按 mode 选对应的那个 schema。
+	const usernameRule = zodStringRule(
+		isSignUp
+			? signUpWithInvitationInputSchema.shape.username
+			: signInInputSchema.shape.username,
+	);
+	const passwordRule = zodStringRule(
+		isSignUp
+			? signUpWithInvitationInputSchema.shape.password
+			: signInInputSchema.shape.password,
+	);
+	const invitationCodeRule = zodStringRule(
+		signUpWithInvitationInputSchema.shape.invitationCode,
+	);
 
 	return (
-		<main className="flex min-h-svh items-center justify-center px-6 py-16">
-			<Card className="w-full max-w-md">
-				<CardHeader>
-					<CardTitle className="text-2xl">
-						{mode === "signup" ? "创建账户" : "登录"}
-					</CardTitle>
-					<CardDescription>
-						{mode === "signup"
-							? "填写信息以注册新账户。"
-							: "使用用户名和密码登录。"}
-					</CardDescription>
-				</CardHeader>
+		<Flex
+			align="center"
+			justify="center"
+			style={{ minHeight: "100dvh", padding: 24 }}
+		>
+			<Card style={{ maxWidth: 420, width: "100%" }}>
+				<Typography.Title level={3} style={{ marginBlock: "0 4px" }}>
+					{isSignUp ? "创建账户" : "登录"}
+				</Typography.Title>
+				<Typography.Paragraph type="secondary">
+					{isSignUp ? "填写信息以注册新账户。" : "使用用户名和密码登录。"}
+				</Typography.Paragraph>
 
-				<CardContent>
-					<form id="auth-form" onSubmit={handleSubmit}>
-						<FieldGroup>
-							<Field>
-								<FieldLabel htmlFor="auth-username">用户名</FieldLabel>
-								<Input
-									autoComplete="username"
-									id="auth-username"
-									maxLength={USERNAME_MAX_LENGTH}
-									minLength={USERNAME_MIN_LENGTH}
-									onChange={(event) =>
-										dispatchForm({
-											type: "set_field",
-											field: "username",
-											value: event.target.value,
-										})
-									}
-									pattern={USERNAME_PATTERN}
-									placeholder={
-										mode === "signup"
-											? `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} 位，字母/数字/下划线`
-											: "请输入用户名"
-									}
-									required
-									type="text"
-									value={username}
-								/>
-							</Field>
-							{mode === "signup" && requireInvitationCode ? (
-								<Field>
-									<FieldLabel htmlFor="auth-invitation">邀请码</FieldLabel>
-									<Input
-										autoComplete="off"
-										id="auth-invitation"
-										maxLength={INVITATION_CODE_MAX_LENGTH}
-										minLength={INVITATION_CODE_MIN_LENGTH}
-										onChange={(event) =>
-											dispatchForm({
-												type: "set_field",
-												field: "invitationCode",
-												value: event.target.value,
-											})
-										}
-										pattern={INVITATION_CODE_PATTERN}
-										placeholder="请输入邀请码"
-										required
-										type="text"
-										value={invitationCode}
-									/>
-								</Field>
-							) : null}
-							<Field>
-								<FieldLabel htmlFor="auth-password">密码</FieldLabel>
-								<Input
-									autoComplete={
-										mode === "signup" ? "new-password" : "current-password"
-									}
-									id="auth-password"
-									minLength={PASSWORD_MIN_LENGTH}
-									onChange={(event) =>
-										dispatchForm({
-											type: "set_field",
-											field: "password",
-											value: event.target.value,
-										})
-									}
-									placeholder={`至少 ${PASSWORD_MIN_LENGTH} 位`}
-									required
-									type="password"
-									value={password}
-								/>
-							</Field>
-						</FieldGroup>
-					</form>
-				</CardContent>
+				<Form<AuthFormValues>
+					disabled={isPending}
+					form={form}
+					layout="vertical"
+					onFinish={handleFinish}
+					requiredMark={false}
+				>
+					<Form.Item label="用户名" name="username" rules={[usernameRule]}>
+						<Input
+							autoComplete="username"
+							maxLength={USERNAME_MAX_LENGTH}
+							placeholder={
+								isSignUp
+									? `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} 位，字母/数字/下划线`
+									: "请输入用户名"
+							}
+						/>
+					</Form.Item>
 
-				<CardFooter className="flex-col items-stretch gap-3">
-					<LoadingButton
-						className="w-full"
-						form="auth-form"
-						loading={isPending}
-						type="submit"
-					>
-						{mode === "signup" ? "创建账户" : "登录"}
-					</LoadingButton>
-					<Button
-						className="w-full"
-						onClick={() => dispatchForm({ type: "toggle_mode" })}
-						type="button"
-						variant="ghost"
-					>
-						{mode === "signin" ? "还没有账户？注册" : "已有账户？登录"}
-					</Button>
-				</CardFooter>
+					{isSignUp && requireInvitationCode ? (
+						<Form.Item
+							label="邀请码"
+							name="invitationCode"
+							rules={[invitationCodeRule]}
+						>
+							<Input
+								autoComplete="off"
+								maxLength={INVITATION_CODE_MAX_LENGTH}
+								placeholder={`请输入邀请码（至少 ${INVITATION_CODE_MIN_LENGTH} 位）`}
+							/>
+						</Form.Item>
+					) : null}
+
+					<Form.Item label="密码" name="password" rules={[passwordRule]}>
+						<Input.Password
+							autoComplete={isSignUp ? "new-password" : "current-password"}
+							placeholder={
+								isSignUp ? `至少 ${PASSWORD_MIN_LENGTH} 位` : "请输入密码"
+							}
+						/>
+					</Form.Item>
+
+					<Form.Item style={{ marginBottom: 8 }}>
+						<Button block htmlType="submit" loading={isPending} type="primary">
+							{isSignUp ? "创建账户" : "登录"}
+						</Button>
+					</Form.Item>
+				</Form>
+
+				<Button
+					block
+					disabled={isPending}
+					onClick={() => setMode(isSignUp ? "signin" : "signup")}
+					type="text"
+				>
+					{isSignUp ? "已有账户？登录" : "还没有账户？注册"}
+				</Button>
 			</Card>
-		</main>
+		</Flex>
 	);
 }

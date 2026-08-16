@@ -1,24 +1,21 @@
+import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import {
 	clearSessionToken,
 	getSessionToken,
 } from "@repo/app-convex/session-store";
 import { useSession } from "@repo/app-convex/use-session";
-import { Separator } from "@repo/ui/components/separator";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@repo/ui/components/sidebar";
-import { Spinner } from "@repo/ui/components/spinner";
 import {
 	createFileRoute,
 	Navigate,
 	Outlet,
 	redirect,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { Button, Flex, Grid, Layout, Spin, theme } from "antd";
+import { useEffect, useState } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+
+const { Content, Header } = Layout;
 
 export const Route = createFileRoute("/_authenticated")({
 	// Client-only render (`ssr: false`). The whole app renders on the client —
@@ -37,6 +34,16 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
 	const { sessionToken, user, isPending } = useSession();
+	const { token } = theme.useToken();
+	const screens = Grid.useBreakpoint();
+	// `useBreakpoint` 首帧返回空对象，所以显式和 `false` 比较：未知时按桌面处理。
+	const isMobile = screens.lg === false;
+	const [collapsed, setCollapsed] = useState(false);
+
+	useEffect(() => {
+		// 越过 lg 断点时自动跟随；用户之后仍可用 header 上的按钮手动切换。
+		setCollapsed(isMobile);
+	}, [isMobile]);
 
 	useEffect(() => {
 		// Token present but `me` resolved to no user → it's stale/expired/revoked.
@@ -51,9 +58,9 @@ function AuthenticatedLayout() {
 	}
 	if (isPending) {
 		return (
-			<div className="flex min-h-svh items-center justify-center">
-				<Spinner className="size-6" />
-			</div>
+			<Flex align="center" justify="center" style={{ minHeight: "100dvh" }}>
+				<Spin size="large" />
+			</Flex>
 		);
 	}
 	if (user == null) {
@@ -63,21 +70,38 @@ function AuthenticatedLayout() {
 		return <Navigate to="/access-denied" />;
 	}
 
+	// `hasSider` 必须显式传：`AppSidebar` 是个包装组件，antd 无法从 children
+	// 里探测到 `Layout.Sider`，不传就不会应用横向 flex 布局。
+	// 外层高度锁在 100dvh，滚动交给 `Content`（`minHeight: 0` + `overflow: auto`），
+	// 这样长页面只在内容区滚动，不会出现整页 + 内容区的双滚动条。
 	return (
-		<SidebarProvider className="h-svh overflow-hidden">
-			<AppSidebar />
-			<SidebarInset className="min-h-0">
-				<header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-					<SidebarTrigger className="-ml-1" />
-					<Separator
-						className="mx-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center"
-						orientation="vertical"
+		<Layout hasSider style={{ height: "100dvh" }}>
+			<AppSidebar collapsed={collapsed} collapsedWidth={isMobile ? 0 : 64} />
+			<Layout style={{ minWidth: 0 }}>
+				<Header
+					style={{
+						alignItems: "center",
+						backgroundColor: token.colorBgContainer,
+						borderBlockEnd: `1px solid ${token.colorSplit}`,
+						display: "flex",
+						flexShrink: 0,
+						gap: 8,
+						height: 56,
+						lineHeight: "56px",
+						paddingInline: 16,
+					}}
+				>
+					<Button
+						aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+						icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+						onClick={() => setCollapsed((value) => !value)}
+						type="text"
 					/>
-				</header>
-				<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+				</Header>
+				<Content style={{ minHeight: 0, overflow: "auto", padding: 16 }}>
 					<Outlet />
-				</div>
-			</SidebarInset>
-		</SidebarProvider>
+				</Content>
+			</Layout>
+		</Layout>
 	);
 }

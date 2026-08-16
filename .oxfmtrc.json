@@ -6,7 +6,6 @@
 	"semi": true,
 	"trailingComma": "all",
 	"sortImports": true,
-	"sortTailwindcss": true,
 	"sortPackageJson": true,
 	"ignorePatterns": [
 		"**/dist",
@@ -20,9 +19,6 @@
 		"**/routeTree.gen.ts",
 		"**/_generated",
 		"**/generated",
-		"**/shared/api.ts",
-		"packages/ui/src/components/*.tsx",
-		"packages/ui/src/hooks",
-		"packages/ui/src/lib"
+		"**/shared/api.ts"
 	]
 }

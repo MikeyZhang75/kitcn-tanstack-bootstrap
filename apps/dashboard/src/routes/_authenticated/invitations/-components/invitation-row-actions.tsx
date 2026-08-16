@@ -1,4 +1,4 @@
-import { Button } from "@repo/ui/components/button";
+import { Button } from "antd";
 
 import type { InvitationRow } from "../-model/invitation-row";
 
@@ -11,13 +11,14 @@ export function InvitationRowActions({
 	invitation,
 	onRevoke,
 }: InvitationRowActionsProps) {
+	// 只有 active 的码可以撤销；used / revoked 都是终态。
 	const revocable = invitation.status === "active";
 	return (
 		<Button
 			disabled={!revocable}
 			onClick={() => onRevoke(invitation)}
-			size="sm"
-			variant="ghost"
+			size="small"
+			type="link"
 		>
 			撤销
 		</Button>
