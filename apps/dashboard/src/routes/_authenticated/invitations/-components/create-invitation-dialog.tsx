@@ -3,10 +3,16 @@
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { useSessionToken } from "@repo/app-convex/use-session";
-import { invitationCodeInputSchema } from "@repo/backend/shared/tables/invitations";
+import {
+	createInvitationInputSchema,
+	DEFAULT_INVITATION_CREATE_COUNT,
+	GENERATED_INVITATION_CODE_LENGTH,
+	INVITATION_CREATE_COUNT_MAX,
+	INVITATION_CREATE_COUNT_MIN,
+} from "@repo/backend/shared/tables/invitations";
 import { useMutation } from "@tanstack/react-query";
 import type { FormRule } from "antd";
-import { App, Button, Form, Input, Modal, Typography } from "antd";
+import { App, Button, Form, InputNumber, Modal, Typography } from "antd";
 import { useState } from "react";
 
 interface CreateInvitationDialogProps {
@@ -14,16 +20,15 @@ interface CreateInvitationDialogProps {
 }
 
 type CreateInvitationValues = {
-	code?: string;
+	count: number;
 };
 
-// 自定义码是可选的：留空走后端自动生成，所以空值直接放行，只有真的填了内容
-// 才用后端那份 schema 校验（长度 / 字符集 / 中文文案都在它身上）。
-const optionalCodeRule: FormRule = {
+// 上下限和中文文案都在后端 schema 上，前端不再复述一遍 min / max / message。
+// InputNumber 被清空时给的是 null，这里不做兜底，直接丢给 schema，让「没填」
+// 也走它自己的中文文案而不是 antd 的通用 required 模板。
+const countRule: FormRule = {
 	validator: (_rule, value: unknown) => {
-		const trimmed = typeof value === "string" ? value.trim() : "";
-		if (trimmed.length === 0) return Promise.resolve();
-		const result = invitationCodeInputSchema.safeParse(trimmed);
+		const result = createInvitationInputSchema.shape.count.safeParse(value);
 		if (result.success) return Promise.resolve();
 		return Promise.reject(new Error(result.error.issues[0]?.message));
 	},
@@ -41,13 +46,19 @@ export function CreateInvitationDialog({
 	const createMutation = useMutation(crpc.invitations.create.mutationOptions());
 
 	const handleFinish = (values: CreateInvitationValues) => {
-		const trimmed = values.code?.trim() ?? "";
-
 		createMutation.mutate(
-			trimmed.length === 0 ? { sessionToken } : { code: trimmed, sessionToken },
+			{ count: values.count, sessionToken },
 			{
 				onSuccess: (response) => {
-					message.success(`邀请码 ${response.data.code} 已创建`);
+					const { codes } = response.data;
+					const [first] = codes;
+					// 单个时把码直接念出来（最常见的操作是生成一个然后发出去）；
+					// 批量时只报数量，剩下的去表格里看。
+					message.success(
+						codes.length === 1 && first
+							? `邀请码 ${first} 已创建`
+							: `已创建 ${codes.length} 个邀请码`,
+					);
 					form.resetFields();
 					setOpen(false);
 					onCreated();
@@ -81,16 +92,25 @@ export function CreateInvitationDialog({
 				title="新建邀请码"
 			>
 				<Typography.Paragraph type="secondary">
-					留空将自动生成 12 位随机邀请码，也可手动输入自定义码。
+					邀请码由系统随机生成（{GENERATED_INVITATION_CODE_LENGTH}{" "}
+					位，不含易混淆字符），不支持自定义。填写数量可一次生成多个。
 				</Typography.Paragraph>
 				<Form<CreateInvitationValues>
 					disabled={createMutation.isPending}
 					form={form}
+					initialValues={{ count: DEFAULT_INVITATION_CREATE_COUNT }}
 					layout="vertical"
 					onFinish={handleFinish}
 				>
-					<Form.Item label="邀请码" name="code" rules={[optionalCodeRule]}>
-						<Input autoComplete="off" placeholder="留空以自动生成" />
+					<Form.Item label="创建数量" name="count" rules={[countRule]}>
+						<InputNumber
+							autoFocus
+							max={INVITATION_CREATE_COUNT_MAX}
+							min={INVITATION_CREATE_COUNT_MIN}
+							precision={0}
+							step={1}
+							style={{ width: "100%" }}
+						/>
 					</Form.Item>
 				</Form>
 			</Modal>

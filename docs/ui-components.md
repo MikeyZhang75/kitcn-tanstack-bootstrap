@@ -90,7 +90,7 @@ import { zodStringRule } from "./-lib/zod-rule";
 
 `zodStringRule` (`apps/*/src/routes/_public/-lib/zod-rule.ts`, mirrored in both apps) wraps a `ZodType` in an antd `FormRule` validator and coerces `undefined → ""`, so the "field is empty" case also surfaces the schema's own Chinese message (e.g. 用户名至少 3 个字符) rather than antd's generic `required` template. This is the [one-source-of-truth rule](conventions.md) applied to forms: length/charset constraints and their messages are declared once, in `packages/backend/convex/shared/tables/*.ts`.
 
-Optional fields need a local variant that short-circuits on empty input before parsing — see `optionalCodeRule` in `invitations/-components/create-invitation-dialog.tsx`.
+Non-string fields need a local variant rather than `zodStringRule` (which coerces to `""`): see `countRule` in `invitations/-components/create-invitation-dialog.tsx`, which hands `InputNumber`'s value — `null` when the field is cleared — straight to `createInvitationInputSchema.shape.count`, so "没填" surfaces the schema's own Chinese message. That's why the schema declares `z.number("请输入创建数量")`: the type-level message is what a cleared field hits.
 
 #### The app shell
 
