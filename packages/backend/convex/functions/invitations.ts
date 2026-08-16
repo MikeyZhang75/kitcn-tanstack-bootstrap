@@ -6,6 +6,7 @@ import { error, ok } from "../lib/responses";
 import {
 	createInvitationInputSchema,
 	DEFAULT_INVITATION_STATUS,
+	GENERATED_INVITATION_CODE_LENGTH,
 	listInputSchema,
 	revokeInvitationInputSchema,
 } from "../shared/tables/invitations";
@@ -101,7 +102,6 @@ export const count = authQuery.requires(["admin"]).query(async ({ ctx }) => {
 });
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const GENERATED_CODE_LENGTH = 12;
 const MAX_GENERATION_ATTEMPTS = 10;
 
 // `Math.random()` is V8's non-cryptographic PRNG — its state can be
@@ -113,22 +113,24 @@ const MAX_GENERATION_ATTEMPTS = 10;
 // if the alphabet length is ever changed.
 function generateRandomCode(): string {
 	const threshold = 256 - (256 % CODE_ALPHABET.length);
-	const buffer = new Uint8Array(GENERATED_CODE_LENGTH);
+	const buffer = new Uint8Array(GENERATED_INVITATION_CODE_LENGTH);
 	let code = "";
-	while (code.length < GENERATED_CODE_LENGTH) {
+	while (code.length < GENERATED_INVITATION_CODE_LENGTH) {
 		crypto.getRandomValues(buffer);
 		for (const byte of buffer) {
 			if (byte >= threshold) continue;
 			code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
-			if (code.length === GENERATED_CODE_LENGTH) break;
+			if (code.length === GENERATED_INVITATION_CODE_LENGTH) break;
 		}
 	}
 	return code;
 }
 
-// Mint a new invitation. If the admin supplied a code we use it verbatim;
-// otherwise we generate a short alphanumeric string (excluding ambiguous
-// characters like 0/O, 1/I/L) and retry on unique-constraint collision.
+// Mint `input.count` invitations in one transaction. Code values are always
+// server-generated — admins can't supply their own. Custom codes only ever
+// bought human-memorable campaign strings, and those are exactly the codes an
+// outsider can guess; since a code is the entire signup gate, the input was
+// dropped rather than kept as an escape hatch.
 export const create = authMutation
 	.requires(["admin"])
 	.input(createInvitationInputSchema)
@@ -139,47 +141,50 @@ export const create = authMutation
 		// cast on every insert call site.
 		const createdBy = ctx.user.id as Id<"user">;
 
-		if (input.code) {
-			const existing = await ctx.orm.query.invitations.findFirst({
-				where: { code: input.code },
-				columns: { id: true },
-			});
-			if (existing) {
-				throw error("CONFLICT", "邀请码已存在");
+		// Generation retry loop — collisions are astronomically unlikely at
+		// 12 × 32-base but we guard against them rather than crashing. `taken`
+		// also dedupes *within* the batch: nothing is written until the loop
+		// finishes, so a same-request twin wouldn't be caught by the probe.
+		const codes: string[] = [];
+		const taken = new Set<string>();
+		for (let index = 0; index < input.count; index++) {
+			let code: string | undefined;
+			for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+				const candidate = generateRandomCode();
+				if (taken.has(candidate)) continue;
+				const existing = await ctx.orm.query.invitations.findFirst({
+					where: { code: candidate },
+					columns: { id: true },
+				});
+				if (existing) continue;
+				code = candidate;
+				break;
 			}
-			const [row] = await ctx.orm
-				.insert(invitationsTable)
-				.values({
-					code: input.code,
-					status: DEFAULT_INVITATION_STATUS,
-					createdBy,
-				})
-				.returning();
-			if (!row) {
-				throw error("INTERNAL_SERVER_ERROR", "邀请码创建失败");
+			if (!code) {
+				throw error("INTERNAL_SERVER_ERROR", "邀请码生成失败，请重试");
 			}
-			return ok({ id: row.id, code: input.code });
+			taken.add(code);
+			codes.push(code);
 		}
 
-		// Generation retry loop — collisions are astronomically unlikely at
-		// 12 × 32-base but we guard against them rather than crashing.
-		for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
-			const code = generateRandomCode();
-			const existing = await ctx.orm.query.invitations.findFirst({
-				where: { code },
-				columns: { id: true },
-			});
-			if (existing) continue;
-			const [row] = await ctx.orm
-				.insert(invitationsTable)
-				.values({ code, status: DEFAULT_INVITATION_STATUS, createdBy })
-				.returning();
-			if (!row) {
-				throw error("INTERNAL_SERVER_ERROR", "邀请码创建失败");
-			}
-			return ok({ id: row.id, code });
+		// One multi-row insert: kitcn walks the array sequentially, enforcing
+		// the `code` unique index per row, so a duplicate that slipped past the
+		// probe still aborts the whole mutation rather than writing a twin.
+		const rows = await ctx.orm
+			.insert(invitationsTable)
+			.values(
+				codes.map((code) => ({
+					code,
+					status: DEFAULT_INVITATION_STATUS,
+					createdBy,
+				})),
+			)
+			.returning({ code: invitationsTable.code });
+		if (rows.length !== codes.length) {
+			throw error("INTERNAL_SERVER_ERROR", "邀请码创建失败");
 		}
-		throw error("INTERNAL_SERVER_ERROR", "邀请码生成失败，请重试");
+
+		return ok({ codes: rows.map((row) => row.code) });
 	});
 
 // Soft-revoke an active invitation by transitioning `status` to `revoked`.

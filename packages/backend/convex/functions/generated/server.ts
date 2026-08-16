@@ -34,7 +34,7 @@ const ormSchema = schema;
 
 registerProcedureNameLookup(
   {
-  "invitations.ts": [{ column: 51, line: 98, name: "invitations:count" }, { column: 2, line: 135, name: "invitations:create" }, { column: 2, line: 46, name: "invitations:list" }, { column: 2, line: 192, name: "invitations:revoke" }],
+  "invitations.ts": [{ column: 51, line: 99, name: "invitations:count" }, { column: 2, line: 137, name: "invitations:create" }, { column: 2, line: 47, name: "invitations:list" }, { column: 2, line: 197, name: "invitations:revoke" }],
   "session.ts": [{ column: 49, line: 69, name: "session:me" }, { column: 2, line: 20, name: "session:signIn" }, { column: 2, line: 59, name: "session:signOut" }],
   "settings.ts": [{ column: 51, line: 15, name: "settings:getRegistrationSettings" }, { column: 2, line: 33, name: "settings:setRequireInvitationCode" }],
   "signup.ts": [{ column: 2, line: 30, name: "signup:signUpWithInvitation" }],
