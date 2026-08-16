@@ -4,122 +4,96 @@ import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { useSessionToken } from "@repo/app-convex/use-session";
 import { invitationCodeInputSchema } from "@repo/backend/shared/tables/invitations";
-import { Button } from "@repo/ui/components/button";
-import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@repo/ui/components/dialog";
-import { Input } from "@repo/ui/components/input";
-import { Label } from "@repo/ui/components/label";
 import { useMutation } from "@tanstack/react-query";
+import type { FormRule } from "antd";
+import { App, Button, Form, Input, Modal, Typography } from "antd";
 import { useState } from "react";
-import { toast } from "sonner";
 
 interface CreateInvitationDialogProps {
 	onCreated: () => void;
 }
 
+type CreateInvitationValues = {
+	code?: string;
+};
+
+// 自定义码是可选的：留空走后端自动生成，所以空值直接放行，只有真的填了内容
+// 才用后端那份 schema 校验（长度 / 字符集 / 中文文案都在它身上）。
+const optionalCodeRule: FormRule = {
+	validator: (_rule, value: unknown) => {
+		const trimmed = typeof value === "string" ? value.trim() : "";
+		if (trimmed.length === 0) return Promise.resolve();
+		const result = invitationCodeInputSchema.safeParse(trimmed);
+		if (result.success) return Promise.resolve();
+		return Promise.reject(new Error(result.error.issues[0]?.message));
+	},
+};
+
 export function CreateInvitationDialog({
 	onCreated,
 }: CreateInvitationDialogProps) {
 	const crpc = useCRPC();
+	const { message } = App.useApp();
 	const sessionToken = useSessionToken() ?? "";
 	const [open, setOpen] = useState(false);
-	const [code, setCode] = useState("");
-	const [codeError, setCodeError] = useState<string | null>(null);
+	const [form] = Form.useForm<CreateInvitationValues>();
 
 	const createMutation = useMutation(crpc.invitations.create.mutationOptions());
 
-	const handleCodeChange = (value: string) => {
-		setCode(value);
-		if (codeError) setCodeError(null);
+	const handleFinish = (values: CreateInvitationValues) => {
+		const trimmed = values.code?.trim() ?? "";
+
+		createMutation.mutate(
+			trimmed.length === 0 ? { sessionToken } : { code: trimmed, sessionToken },
+			{
+				onSuccess: (response) => {
+					message.success(`邀请码 ${response.data.code} 已创建`);
+					form.resetFields();
+					setOpen(false);
+					onCreated();
+				},
+				onError: (err) => {
+					message.error(extractErrorMessage(err) ?? "创建失败");
+				},
+			},
+		);
 	};
 
-	const handleSubmit = () => {
-		const trimmed = code.trim();
-
-		let payload: { code?: string; sessionToken: string };
-		if (trimmed.length === 0) {
-			payload = { sessionToken };
-		} else {
-			const parsed = invitationCodeInputSchema.safeParse(trimmed);
-			if (!parsed.success) {
-				setCodeError(parsed.error.issues[0]?.message ?? "邀请码无效");
-				return;
-			}
-			payload = { code: parsed.data, sessionToken };
-		}
-
-		createMutation.mutate(payload, {
-			onSuccess: (response) => {
-				toast.success(`邀请码 ${response.data.code} 已创建`);
-				setCode("");
-				setCodeError(null);
-				setOpen(false);
-				onCreated();
-			},
-			onError: (err) => {
-				toast.error(extractErrorMessage(err) ?? "创建失败");
-			},
-		});
-	};
-
-	const handleOpenChange = (next: boolean) => {
+	const handleCancel = () => {
 		if (createMutation.isPending) return;
-		if (!next) {
-			setCode("");
-			setCodeError(null);
-		}
-		setOpen(next);
+		form.resetFields();
+		setOpen(false);
 	};
 
 	return (
-		<Dialog onOpenChange={handleOpenChange} open={open}>
-			<DialogTrigger render={<Button>新建邀请码</Button>} />
-			<DialogContent>
-				<DialogHeader>
-					<DialogTitle>新建邀请码</DialogTitle>
-					<DialogDescription>
-						留空将自动生成 12 位随机邀请码，也可手动输入自定义码。
-					</DialogDescription>
-				</DialogHeader>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor="invitation-code">邀请码</Label>
-					<Input
-						autoComplete="off"
-						disabled={createMutation.isPending}
-						id="invitation-code"
-						onChange={(e) => handleCodeChange(e.target.value)}
-						placeholder="留空以自动生成"
-						value={code}
-					/>
-					{codeError ? (
-						<p className="text-destructive text-xs">{codeError}</p>
-					) : null}
-				</div>
-				<DialogFooter>
-					<DialogClose
-						render={
-							<Button disabled={createMutation.isPending} variant="outline">
-								取消
-							</Button>
-						}
-					/>
-					<LoadingButton
-						loading={createMutation.isPending}
-						onClick={handleSubmit}
-					>
-						创建
-					</LoadingButton>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		<>
+			<Button onClick={() => setOpen(true)} type="primary">
+				新建邀请码
+			</Button>
+			<Modal
+				confirmLoading={createMutation.isPending}
+				destroyOnHidden
+				mask={{ closable: !createMutation.isPending }}
+				okText="创建"
+				onCancel={handleCancel}
+				onOk={() => form.submit()}
+				open={open}
+				title="新建邀请码"
+			>
+				<Typography.Paragraph type="secondary">
+					留空将自动生成 12 位随机邀请码，也可手动输入自定义码。
+				</Typography.Paragraph>
+				<Form<CreateInvitationValues>
+					disabled={createMutation.isPending}
+					form={form}
+					layout="vertical"
+					onFinish={handleFinish}
+				>
+					<Form.Item label="邀请码" name="code" rules={[optionalCodeRule]}>
+						<Input autoComplete="off" placeholder="留空以自动生成" />
+					</Form.Item>
+				</Form>
+			</Modal>
+		</>
 	);
 }

@@ -9,7 +9,10 @@ import {
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
 } from 'kitcn/server';
-import type { internal as generatedInternal } from '../_generated/api';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'kitcn/orm';
 

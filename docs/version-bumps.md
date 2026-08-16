@@ -200,6 +200,33 @@ test plan if the surface area is non-trivial.
 | 2026-07-26 | `@types/node`              | 25.6.0   | 26.1.1   | web, dashboard, app-convex              | `33f3a3f` |
 | 2026-08-17 | `kitcn`                    | 0.15.17  | 0.17.4   | all four workspaces                     | `abcd641` |
 | 2026-08-17 | `convex`                   | 1.42.3   | 1.44.0   | all four workspaces                     | `abcd641` |
+| 2026-08-17 | `antd`                     | —        | 6.6.0    | web, dashboard (new dep)                | —         |
+| 2026-08-17 | `@ant-design/icons`        | —        | 6.3.2    | web, dashboard (new dep)                | —         |
+| 2026-08-17 | `@repo/ui` (whole package) | —        | —        | deleted                                 | —         |
+| 2026-08-17 | `tailwindcss`              | 4.3.3    | —        | web, dashboard (removed)                | —         |
+| 2026-08-17 | `@tailwindcss/vite`        | 4.3.3    | —        | `@repo/vite-preset` (removed)           | —         |
+| 2026-08-17 | `lucide-react`             | 1.27.0   | —        | web, dashboard (removed)                | —         |
+| 2026-08-17 | `sonner`                   | 2.0.7    | —        | web, dashboard (removed)                | —         |
+| 2026-08-17 | `@tanstack/react-table`    | 8.21.3   | —        | web, dashboard (removed)                | —         |
+
+Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
+(`abcd641`) are a routine coupled bump — notes for those are in the section
+below. Everything from `antd` down is the **shadcn → Ant Design migration**,
+which is not a bump at all: `packages/ui` was deleted outright and both apps
+now depend on `antd` + `@ant-design/icons` directly. That also dropped every
+dependency that only existed to serve shadcn primitives (`@base-ui/react`,
+`@shadcn/react`, `shadcn`, `class-variance-authority`, `clsx`,
+`tailwind-merge`, `tw-animate-css`, `cmdk`, `date-fns`,
+`embla-carousel-react`, `input-otp`, `next-themes`, `react-day-picker`,
+`react-resizable-panels`, `recharts`, `@fontsource-variable/geist`) — they
+went with the package, so they get no individual rows. Notes for future bumps:
+
+- **`antd` and `@ant-design/icons` move together.** antd 6 requires icons >= 6,
+  and icons 6 is not compatible with antd 5. Bump both in the same commit.
+- **`@ant-design/v5-patch-for-react-19` is not needed.** antd 6 supports React
+  19 natively; adding the shim would be a regression.
+- Every `@repo/ui`-scoped row above this point is **historical** — that
+  workspace no longer exists. Don't try to "fix" those rows.
 
 The three `@repo/ui` rows tagged `d33a66c` came from a `shadcn` registry
 refresh, not a manual audit — the CLI rewrites `packages/ui/package.json` pins
@@ -301,7 +328,7 @@ test files in either app. Unrelated to this bump; CI doesn't run it.
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope              | Risk | Notes                                                                                                                                                                                      |
-| ------------ | ------- | ------ | ------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `typescript` | 6.0.3   | 7.0.2  | all six workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
-| `turbo`      | 2.10.6  | 2.10.7 | root               | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |
+| Package      | Current | Latest | Scope               | Risk | Notes                                                                                                                                                                                      |
+| ------------ | ------- | ------ | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `typescript` | 6.0.3   | 7.0.2  | all five workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
+| `turbo`      | 2.10.6  | 2.10.7 | root                | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |

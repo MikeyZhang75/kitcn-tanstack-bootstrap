@@ -10,7 +10,7 @@ A Bun + Turborepo monorepo template for shipping production apps on **TanStack S
 | Frontend | TanStack Start (Vite, SPA mode on Cloudflare Workers), TanStack Router, TanStack Query                                            |
 | Backend  | Convex with [kitcn](https://kitcn.dev) procedure builders + ORM                                                                   |
 | Auth     | Custom session-token user system (scrypt credentials, `localStorage` token, role-gated apps)                                      |
-| UI       | shadcn (base-ui variant) under `@repo/ui`                                                                                         |
+| UI       | Ant Design v6 (`antd` + `@ant-design/icons`), no CSS framework                                                                    |
 | Tooling  | [oxc](https://oxc.rs) (`oxfmt` + `oxlint --type-aware`), [portless](https://github.com/nicepkg/portless) named-localhost dev URLs |
 | Deploy   | Cloudflare Workers via `@cloudflare/vite-plugin` (per-app `wrangler.jsonc`)                                                       |
 
@@ -125,23 +125,20 @@ bun run dev      # kitcn dev (Convex + codegen watcher)
 bun run deploy   # kitcn deploy --yes (prod)
 ```
 
-## Adding shadcn components
+## UI
 
-Run the shadcn CLI from inside either app — the CLI reads the app's `components.json` and writes new primitives into `packages/ui/src/components/` automatically:
-
-```bash
-cd apps/web
-bunx shadcn@latest add button
-```
-
-Import primitives from the shared `@repo/ui` workspace:
+Components come from [Ant Design](https://ant.design) v6, imported directly in each app. There is no shared UI workspace and no CSS framework — no Tailwind, no `className` styling:
 
 ```tsx
-import { Button } from "@repo/ui/components/button";
-import { cn } from "@repo/ui/lib/utils";
+import { DashboardOutlined } from "@ant-design/icons";
+import { Button, Flex, theme, Typography } from "antd";
+
+const { token } = theme.useToken();
 ```
 
-First-party wrappers (DataTable, LoadingButton, NavUser) live under `@repo/ui/components/custom-ui/` — see [docs/ui-components.md](docs/ui-components.md).
+Layout goes through antd's own primitives (`Flex`, `Layout`, `Typography`); everything else is an inline `style` fed by `theme.useToken()`. Locale (`zh_CN`) and theme are configured once in each app's `src/components/providers.tsx`, and toasts come from `App.useApp()` rather than the static `message` export.
+
+See [docs/ui-components.md](docs/ui-components.md) for the shell, table, and form patterns plus the antd v6 API notes.
 
 ## Production deployment
 
@@ -165,7 +162,7 @@ For schema changes that need a backfill (e.g. adding a `.notNull()` column), fol
 - [Backend architecture](docs/backend-architecture.md) — kitcn procedure builders, `{ code, message, data? }` cRPC envelope
 - [Auth flow](docs/auth.md) — custom session-token auth (no Better Auth/JWT), client-side role gate, cold-start admin
 - [Frontend architecture](docs/frontend-architecture.md) — TanStack Router layouts, FSD-style slices
-- [UI components](docs/ui-components.md) — shadcn (base-ui variant) and `@repo/ui/custom-ui/`
+- [UI components](docs/ui-components.md) — Ant Design v6, theme tokens, shell / table / form patterns
 - [Invitations feature](docs/feature-invitations.md) — admin-minted signup codes, state machine
 - [Conventions](docs/conventions.md) — `useReducer` rule, shared-schema-per-procedure, kitcn target asymmetry
 - [Dev environment](docs/dev-environment.md) — portless setup, Conductor symlinks

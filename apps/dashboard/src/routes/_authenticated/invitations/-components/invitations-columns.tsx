@@ -1,4 +1,5 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { TableColumnsType } from "antd";
+import { Typography } from "antd";
 
 import type { InvitationRow } from "../-model/invitation-row";
 import { InvitationRowActions } from "./invitation-row-actions";
@@ -14,80 +15,73 @@ const dateFormat = new Intl.DateTimeFormat("zh-CN", {
 
 export function createInvitationsColumns(options: {
 	onRevoke: (invitation: InvitationRow) => void;
-}): ColumnDef<InvitationRow>[] {
+}): TableColumnsType<InvitationRow> {
 	return [
 		{
-			accessorKey: "code",
-			header: "邀请码",
-			cell: ({ row }) => (
-				<span className="truncate font-mono text-xs">{row.original.code}</span>
+			dataIndex: "code",
+			key: "code",
+			render: (_value, row) => (
+				<Typography.Text code>{row.code}</Typography.Text>
 			),
+			title: "邀请码",
 		},
 		{
-			accessorKey: "status",
-			header: "状态",
-			cell: ({ row }) => <InvitationStatusBadge status={row.original.status} />,
-			size: 100,
+			dataIndex: "status",
+			key: "status",
+			render: (_value, row) => <InvitationStatusBadge status={row.status} />,
+			title: "状态",
+			width: 110,
 		},
 		{
-			accessorKey: "usedBy",
-			header: "使用者",
-			cell: ({ row }) => {
-				// Prefer the resolved username; fall back to the raw id (user
-				// since deleted) or an em-dash.
-				const display = row.original.usedByName ?? row.original.usedBy;
-				return (
-					<span className="text-muted-foreground truncate">
-						{display ?? "—"}
-					</span>
-				);
-			},
-		},
-		{
-			accessorKey: "createdBy",
-			header: "创建者",
-			cell: ({ row }) => {
-				const display = row.original.createdByName ?? row.original.createdBy;
-				return (
-					<span className="text-muted-foreground truncate">
-						{display ?? "—"}
-					</span>
-				);
-			},
-		},
-		{
-			accessorKey: "usedAt",
-			header: "使用时间",
-			cell: ({ row }) => {
-				const usedAt = row.original.usedAt;
-				return (
-					<span className="text-muted-foreground">
-						{usedAt ? dateFormat.format(usedAt) : "—"}
-					</span>
-				);
-			},
-			size: 160,
-		},
-		{
-			accessorKey: "createdAt",
-			header: "创建时间",
-			cell: ({ row }) => (
-				<span className="text-muted-foreground">
-					{dateFormat.format(row.original.createdAt)}
-				</span>
+			dataIndex: "usedBy",
+			key: "usedBy",
+			// 优先显示解析出来的用户名；用户已被删除时退回原始 id，再没有就画横杠。
+			render: (_value, row) => (
+				<Typography.Text type="secondary">
+					{row.usedByName ?? row.usedBy ?? "—"}
+				</Typography.Text>
 			),
-			size: 160,
+			title: "使用者",
 		},
 		{
-			id: "actions",
-			header: "",
-			cell: ({ row }) => (
-				<InvitationRowActions
-					invitation={row.original}
-					onRevoke={options.onRevoke}
-				/>
+			dataIndex: "createdBy",
+			key: "createdBy",
+			render: (_value, row) => (
+				<Typography.Text type="secondary">
+					{row.createdByName ?? row.createdBy ?? "—"}
+				</Typography.Text>
 			),
-			size: 80,
+			title: "创建者",
+		},
+		{
+			dataIndex: "usedAt",
+			key: "usedAt",
+			render: (_value, row) => (
+				<Typography.Text type="secondary">
+					{row.usedAt ? dateFormat.format(row.usedAt) : "—"}
+				</Typography.Text>
+			),
+			title: "使用时间",
+			width: 180,
+		},
+		{
+			dataIndex: "createdAt",
+			key: "createdAt",
+			render: (_value, row) => (
+				<Typography.Text type="secondary">
+					{dateFormat.format(row.createdAt)}
+				</Typography.Text>
+			),
+			title: "创建时间",
+			width: 180,
+		},
+		{
+			key: "actions",
+			render: (_value, row) => (
+				<InvitationRowActions invitation={row} onRevoke={options.onRevoke} />
+			),
+			title: "",
+			width: 90,
 		},
 	];
 }

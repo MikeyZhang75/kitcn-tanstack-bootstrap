@@ -1,7 +1,13 @@
 import type { InvitationStatus } from "@repo/backend/shared/tables/invitations";
+import type { BadgeProps } from "antd";
 
-export const INVITATION_STATUS_DOT_COLOR: Record<InvitationStatus, string> = {
-	active: "bg-emerald-500",
-	used: "bg-slate-400",
-	revoked: "bg-red-500",
+// 状态 → antd Badge 的预设状态色。文案走后端的
+// `INVITATION_STATUS_LABELS`，这里只负责颜色映射。
+export const INVITATION_STATUS_BADGE: Record<
+	InvitationStatus,
+	NonNullable<BadgeProps["status"]>
+> = {
+	active: "success",
+	used: "default",
+	revoked: "error",
 };

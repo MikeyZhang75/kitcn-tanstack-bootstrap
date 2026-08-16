@@ -1,1 +1,8 @@
-@import "@repo/ui/styles/globals.css";
+/* antd 的全局重置，取代原先的 Tailwind preflight + shadcn globals.css。
+   组件级样式由 antd 的 CSS-in-JS 在运行时按需注入，这里不需要（也不应该）
+   再声明任何组件样式；要改主题请走 providers.tsx 的 ConfigProvider theme。 */
+@import "antd/dist/reset.css";
+
+* {
+	scrollbar-width: thin;
+}

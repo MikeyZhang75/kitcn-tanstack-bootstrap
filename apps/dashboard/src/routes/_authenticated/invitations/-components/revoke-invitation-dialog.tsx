@@ -1,15 +1,6 @@
 "use client";
 
-import {
-	AlertDialog,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@repo/ui/components/alert-dialog";
-import { LoadingButton } from "@repo/ui/components/custom-ui/loading-button";
+import { Modal, Typography } from "antd";
 
 import type { InvitationRow } from "../-model/invitation-row";
 
@@ -27,33 +18,24 @@ export function RevokeInvitationDialog({
 	onOpenChange,
 }: RevokeInvitationDialogProps) {
 	return (
-		<AlertDialog
-			onOpenChange={(next) => {
+		<Modal
+			cancelButtonProps={{ disabled: isPending }}
+			confirmLoading={isPending}
+			mask={{ closable: !isPending }}
+			okButtonProps={{ danger: true }}
+			okText="确认撤销"
+			onCancel={() => {
 				if (isPending) return;
-				onOpenChange(next);
+				onOpenChange(false);
 			}}
+			onOk={onConfirm}
 			open={invitation != null}
+			title="确认撤销邀请码"
 		>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>确认撤销邀请码</AlertDialogTitle>
-					<AlertDialogDescription>
-						撤销后 <span className="font-mono">{invitation?.code}</span>{" "}
-						将无法再用于注册，且该操作不可恢复。
-					</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel disabled={isPending}>取消</AlertDialogCancel>
-					<LoadingButton
-						data-slot="alert-dialog-action"
-						loading={isPending}
-						onClick={onConfirm}
-						variant={"destructive"}
-					>
-						确认撤销
-					</LoadingButton>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+			<Typography.Paragraph>
+				撤销后 <Typography.Text code>{invitation?.code}</Typography.Text>{" "}
+				将无法再用于注册，且该操作不可恢复。
+			</Typography.Paragraph>
+		</Modal>
 	);
 }
