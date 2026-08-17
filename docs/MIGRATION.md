@@ -61,6 +61,17 @@ Worked example — the session audit feature, which needed both kinds:
   first: `20260816_234850_backfill_session_status` sets `active` on rows written
   before the column existed. Follow the flow below.
 
+That one is now **complete** end to end, and is the reference worked example:
+optional column + migration shipped → `kitcn migrate up` → `.notNull()` +
+every `?? DEFAULT_SESSION_STATUS` fallback deleted → redeploy. What forced the
+last two steps was a _feature_ need rather than tidiness: the compound
+`("userId", "status")` index that fixes bulk session termination can only be
+queried with an equality on `status`, which would have silently skipped any row
+still carrying a null. ⚠️ Its `down` direction is now unusable — it writes
+`status: undefined`, which the hardened schema rejects; rolling back means
+un-hardening first, and the migration file itself must not be edited (checksum
+drift).
+
 See [session audit](feature-session-audit.md).
 
 Second worked example — password management ([auth](auth.md) 「密码管理」) — which
@@ -69,10 +80,11 @@ needed **no** migration at all despite touching the schema twice:
 - `credentials.passwordUpdatedAt` / `passwordUpdatedBy` are optional columns.
 - `session.status` gained a fourth value, `password_changed` — a widening.
 
-⚠️ Do **not** bundle an enum widening with the still-pending `.notNull()`
-hardening of `session.status`. The widening is unconditionally safe; the
-hardening still requires the backfill to have run against **prod** first (step 4
-below, which must be triggered by hand). Ship them as separate deploys.
+⚠️ Those two shipped in a separate commit from the `.notNull()` hardening
+above, deliberately. A widening is unconditionally safe; a hardening is only
+safe once the backfill has run against the target (step 4 below, triggered by
+hand). Keep that separation for any future pair — one deploy can fail schema
+validation while the other cannot, and you want to know which.
 
 ## Adding a Required Field to an Existing Table
 

@@ -51,8 +51,11 @@ Five tables in `schema.ts` (all plain app tables — kitcn manages none of them)
   `credentials_userId_unique`, so the by-userId lookups are index-backed and
   adding `index("userId")` would just double the write cost.
 - `session` — `token` (unique, 64 hex chars), `userId` (FK → user), `status`
-  (`active` | `signed_out` | `revoked` | `password_changed`), `expiresAt`, plus
-  nullable `lastSeenAt` / `endedAt` / `revokedBy` / `ipAddress` / `userAgent`.
+  (non-null: `active` | `signed_out` | `revoked` | `password_changed`),
+  `expiresAt`, plus nullable `lastSeenAt` / `endedAt` / `revokedBy` /
+  `ipAddress` / `userAgent`. Indexed on `userId` and on `("userId", "status")` —
+  the compound one backs bulk termination and is why `status` had to be hardened
+  to `.notNull()` first.
   **Rows are never deleted** — sign-out, admin revocation, and a password change
   all flip `status`, which is what makes this table the login audit trail.
   `status` + `expiresAt` are the source of truth; there is nothing to

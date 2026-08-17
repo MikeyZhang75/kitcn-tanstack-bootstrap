@@ -8,7 +8,6 @@ import { verifyPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
 import {
 	countUserSessionsInputSchema,
-	DEFAULT_SESSION_STATUS,
 	LAST_SEEN_THROTTLE_MS,
 	listUserSessionsInputSchema,
 	revokeSessionInputSchema,
@@ -73,7 +72,7 @@ export const signOut = publicMutation
 			where: { token: input.sessionToken },
 			columns: { id: true, status: true },
 		});
-		if (session && (session.status ?? DEFAULT_SESSION_STATUS) === "active") {
+		if (session?.status === "active") {
 			await ctx.orm
 				.update(sessionTable)
 				.set({ status: "signed_out", endedAt: new Date() })
@@ -166,7 +165,6 @@ export const listByUser = authQuery
 		return ok({
 			items: items.map((row) => ({
 				...row,
-				status: row.status ?? DEFAULT_SESSION_STATUS,
 				revokedByName: row.revokedBy
 					? (revokerNames.get(row.revokedBy) ?? null)
 					: null,
@@ -229,11 +227,13 @@ export const revoke = authMutation
 		if (!session) {
 			throw error("NOT_FOUND", "会话不存在");
 		}
-		const status = session.status ?? DEFAULT_SESSION_STATUS;
-		if (status !== "active") {
+		if (session.status !== "active") {
 			// Exhaustive map rather than a ternary: a status added later would
 			// otherwise be silently mislabeled 已终止 with no compile error.
-			throw error("BAD_REQUEST", SESSION_ALREADY_ENDED_MESSAGES[status]);
+			throw error(
+				"BAD_REQUEST",
+				SESSION_ALREADY_ENDED_MESSAGES[session.status],
+			);
 		}
 		// An already-lapsed session is dead anyway, and stamping `revokedBy` on it
 		// would claim an admin ended something that expired on its own. Matches
