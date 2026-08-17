@@ -275,6 +275,14 @@ export const revokeAllForUser = authMutation
 			// accumulates ended sessions and the live ones — always the newest —
 			// would fall outside the window, making 全部踢下线 silently revoke
 			// nothing.
+			//
+			// ⚠️ Since kitcn 0.25, `orderBy` is only pushed down into Convex's
+			// `.order()` when the selected index is FULLY PINNED by `eq` filters
+			// (as `eq(userId, …)` pins the single-field `userId` index here).
+			// Add a range filter (gt/gte/lt/lte) on an indexed column, or widen
+			// that index into a compound one in schema.ts, and the pushdown
+			// silently stops: `limit` degrades from a read bound into a
+			// post-fetch slice over a `collect()` of every matching row.
 			orderBy: { createdAt: "desc" },
 			columns: { id: true, status: true, expiresAt: true },
 			limit: SESSION_REVOKE_BATCH_MAX,
