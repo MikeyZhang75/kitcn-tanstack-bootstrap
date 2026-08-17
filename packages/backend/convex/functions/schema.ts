@@ -10,6 +10,7 @@ import {
 } from "kitcn/orm";
 
 import { INVITATION_STATUSES } from "../shared/tables/invitations";
+import { SESSION_STATUSES } from "../shared/tables/session";
 import { USER_ROLES } from "../shared/tables/user";
 
 // Our own user system (no Better Auth). The user row holds only identity +
@@ -39,9 +40,13 @@ export const credentialsTable = convexTable("credentials", {
 });
 
 // Opaque-token sessions. The `token` is the bearer credential held in the
-// client's localStorage; the row's existence + `expiresAt` is the source of
-// truth (no JWT). `token` is unique → looked up directly by the cRPC auth
+// client's localStorage; there is no JWT, so `status` + `expiresAt` are the
+// source of truth. `token` is unique → looked up directly by the cRPC auth
 // middleware on every authenticated call.
+//
+// Rows are **never deleted** — signing out and admin revocation both flip
+// `status`, so the table doubles as the login audit trail (which is why there
+// is no separate login-log table). See docs/feature-session-audit.md.
 export const sessionTable = convexTable(
 	"session",
 	{
@@ -49,9 +54,35 @@ export const sessionTable = convexTable(
 		userId: id("user")
 			.notNull()
 			.references(() => userTable.id),
+		// `active` | `signed_out` (user signed out) | `revoked` (admin kicked).
+		// "Expired" is deliberately NOT a status — it's derived from `expiresAt`
+		// vs. now, and making it a status would need a cron to maintain.
+		//
+		// TODO(migration): currently nullable so the backfill can run against
+		// existing rows; harden to `.notNull()` once `backfill_session_status`
+		// has completed everywhere. See docs/MIGRATION.md.
+		status: textEnum(SESSION_STATUSES),
 		expiresAt: timestamp().notNull(),
+		// Bumped by the `session.heartbeat` mutation only — Convex queries can't
+		// write, and this app's authenticated traffic is almost entirely queries.
+		// Null until the first heartbeat lands.
+		lastSeenAt: timestamp(),
+		// When the session left `active`, by either path. `revokedBy` names the
+		// admin who kicked it and stays null for a self-service sign-out.
+		endedAt: timestamp(),
+		revokedBy: id("user").references(() => userTable.id),
+		// Best-effort client attribution captured when the session was minted,
+		// from Convex's `ctx.meta.getRequestMetadata()`. Nullable on purpose:
+		// rows minted before this landed have neither, and Convex reports null
+		// for executions with no request behind them (scheduler, crons, CLI).
+		// ⚠️ Advisory telemetry only — see shared/tables/session.ts for why the
+		// IP must never gate authorization.
+		ipAddress: text(),
+		userAgent: text(),
 	},
 	(sessionTable) => [
+		// Load-bearing now: the /users/$userId page lists a user's sessions and
+		// the /users list aggregates active-session counts, both by userId.
 		index("userId").on(sessionTable.userId),
 		index("expiresAt").on(sessionTable.expiresAt),
 	],

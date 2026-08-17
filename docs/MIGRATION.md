@@ -27,6 +27,34 @@ This asymmetry bites: `kitcn deploy` pushes your schema to prod by default,
 but `kitcn migrate up` silently runs against **dev** unless you force the
 target.
 
+## When you do NOT need a migration (read this before writing one)
+
+Convex is not SQL. kitcn's own guidance (`packages/backend/node_modules/kitcn/skills/kitcn/references/features/migrations.md`)
+says to **skip migrations for backward-compatible changes**:
+
+- Adding **optional** fields (`text()` without `.notNull()`)
+- Adding **new tables** or new indexes
+- Anything a code-level default (`doc.field ?? "…"`) can cover
+
+**Rule:** old documents still pass the schema and the app logic → no
+migration. Old documents would fail → migrate.
+
+Everything below in this file is about the cases that _violate_ that rule.
+`.notNull()` is the trigger: the deploy fails at schema validation if any
+existing row lacks the field. An optional column has no such edge — a document
+without the key satisfies `v.optional(...)`.
+
+Worked example — the session audit feature, which needed both kinds:
+
+- `ipAddress` / `userAgent` / `lastSeenAt` / `endedAt` / `revokedBy` are all
+  optional columns on `session` → **no migration**. Pre-existing rows simply
+  carry no metadata.
+- `session.status` is required → **migration needed**, and it's the repo's
+  first: `20260816_234850_backfill_session_status` sets `active` on rows written
+  before the column existed. Follow the flow below.
+
+See [session audit](feature-session-audit.md).
+
 ## Adding a Required Field to an Existing Table
 
 Never deploy a `.notNull()` field before existing rows have that value set.
@@ -93,14 +121,13 @@ migrate check runs against dev, so it will usually print
 
 ### Step 4: Run the migration against prod
 
-On push to `main`, CI runs this automatically via the "Run Convex
-migrations (prod only)" step in `.github/workflows/deploy.yml` — which
-sits right after "Deploy Convex" so schema push and backfill land as a
-single atomic unit per release. The usual path is: merge → CI green =
-prod migrated.
-
-Run it manually only when bypassing CI (hotfixes from a local shell,
-debugging a stuck run, triggering against a dev deployment):
+⚠️ **You must run this by hand.** Earlier revisions of this doc claimed CI
+does it via a "Run Convex migrations (prod only)" step in
+`.github/workflows/deploy.yml` — **there is no `.github/` directory in this
+repo** (`git ls-files | grep github` returns nothing), so no such step exists.
+Forgetting it is the #1 migration footgun here: the backfill silently targets
+dev and prod rows stay unmigrated, and the subsequent `.notNull()` deploy then
+fails schema validation.
 
 **Convex Cloud**
 
@@ -114,11 +141,8 @@ CONVEX_DEPLOY_KEY='prod:<name>|<token>' bunx kitcn migrate up --prod --yes
 bunx kitcn migrate up --env-file .env.prod --yes
 ```
 
-Before CI ran this automatically, forgetting it was the #1 footgun —
-the backfill would run against dev and prod rows would stay
-unmigrated. With CI in place the failure mode has shifted: if the
-migrate step fails, CI goes red and the Cloudflare Pages deploys skip,
-so a broken migration won't be fronted by a new frontend build.
+Drop the flag entirely to target dev — which is what you want while
+developing, and what `bunx kitcn migrate up --yes` does.
 
 ### Step 5: Verify
 

@@ -2,7 +2,10 @@ import { z } from "zod";
 
 import type { MutationCtx, QueryCtx } from "../functions/generated/server";
 import { initCRPC } from "../functions/generated/server";
-import { sessionTokenSchema } from "../shared/tables/session";
+import {
+	DEFAULT_SESSION_STATUS,
+	sessionTokenSchema,
+} from "../shared/tables/session";
 import { type UserRole } from "../shared/tables/user";
 import { error } from "./responses";
 
@@ -28,21 +31,51 @@ const sessionInputSchema = z.object({
 	sessionToken: sessionTokenSchema,
 });
 
+// The current session row, injected onto `ctx` by the auth middleware. Both
+// fields come from the lookup the middleware already performs, so downstream
+// procedures get them for free instead of re-querying by token:
+//   - `session.heartbeat` patches by `id` and throttles on `lastSeenAt`
+//   - `session.revokeAllForUser` excludes `id` so an admin kicking their own
+//     account doesn't log themselves out
+export type IdentitySession = {
+	id: string;
+	lastSeenAt: Date | null;
+};
+
 // The sole authorization path: look the token up in the `session` table,
-// reject if missing/expired, load the user, and enforce the allowed roles.
-// All reads — no `ctx.auth`, no JWT. `Date.now()` is execution-stable in the
-// Convex runtime, so the expiry check is deterministic.
-async function resolveSessionUser(
+// reject if missing/ended/expired, load the user, and enforce the allowed
+// roles. All reads — no `ctx.auth`, no JWT. `Date.now()` is execution-stable in
+// the Convex runtime, so the expiry check is deterministic.
+async function resolveSession(
 	ctx: QueryCtx | MutationCtx,
 	sessionToken: string,
 	allowedRoles: AllowedRoles,
-): Promise<IdentityUser> {
+): Promise<{ user: IdentityUser; session: IdentitySession }> {
 	const session = await ctx.orm.query.session.findFirst({
 		where: { token: sessionToken },
-		columns: { id: true, userId: true, expiresAt: true },
+		columns: {
+			id: true,
+			userId: true,
+			status: true,
+			expiresAt: true,
+			lastSeenAt: true,
+		},
 	});
 	if (!session) {
 		throw error("UNAUTHORIZED", "未登录");
+	}
+	// Rows are never deleted — sign-out and admin revocation flip `status`, so
+	// this check is what actually ends a session. Distinct messages so a kicked
+	// user isn't told they simply expired.
+	// TODO(migration): the `??` tolerates rows written before `status` existed
+	// (they were active); drop it once `backfill_session_status` has run and the
+	// column is hardened to `.notNull()`.
+	const status = session.status ?? DEFAULT_SESSION_STATUS;
+	if (status === "revoked") {
+		throw error("UNAUTHORIZED", "会话已被管理员终止，请重新登录");
+	}
+	if (status === "signed_out") {
+		throw error("UNAUTHORIZED", "会话已退出，请重新登录");
 	}
 	if (session.expiresAt.getTime() <= Date.now()) {
 		throw error("UNAUTHORIZED", "会话已过期，请重新登录");
@@ -60,10 +93,13 @@ async function resolveSessionUser(
 	}
 
 	return {
-		id: user.id,
-		username: user.username,
-		name: user.name,
-		role: user.role,
+		user: {
+			id: user.id,
+			username: user.username,
+			name: user.name,
+			role: user.role,
+		},
+		session: { id: session.id, lastSeenAt: session.lastSeenAt ?? null },
 	};
 }
 
@@ -85,24 +121,24 @@ export const publicRoute = c.httpAction;
 export const authQuery = {
 	requires: (allowedRoles: AllowedRoles) =>
 		c.query.input(sessionInputSchema).use(async ({ ctx, input, next }) => {
-			const user = await resolveSessionUser(
+			const { user, session } = await resolveSession(
 				ctx,
 				input.sessionToken,
 				allowedRoles,
 			);
-			return next({ ctx: { ...ctx, user } });
+			return next({ ctx: { ...ctx, user, session } });
 		}),
 };
 
 export const authMutation = {
 	requires: (allowedRoles: AllowedRoles) =>
 		c.mutation.input(sessionInputSchema).use(async ({ ctx, input, next }) => {
-			const user = await resolveSessionUser(
+			const { user, session } = await resolveSession(
 				ctx,
 				input.sessionToken,
 				allowedRoles,
 			);
-			return next({ ctx: { ...ctx, user } });
+			return next({ ctx: { ...ctx, user, session } });
 		}),
 };
 

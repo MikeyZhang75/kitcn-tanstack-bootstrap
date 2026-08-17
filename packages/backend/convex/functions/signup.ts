@@ -1,19 +1,13 @@
 import { eq } from "kitcn/orm";
 
+import { createSession } from "../lib/create-session";
 import { publicMutation } from "../lib/crpc";
 import { hashPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
-import { generateSessionToken } from "../lib/session-token";
-import { SESSION_TTL_MS } from "../shared/tables/session";
 import { DEFAULT_REGISTRATION_SETTINGS } from "../shared/tables/settings";
 import { signUpWithInvitationInputSchema } from "../shared/tables/user";
 import type { Id } from "./_generated/dataModel";
-import {
-	credentialsTable,
-	invitationsTable,
-	sessionTable,
-	userTable,
-} from "./schema";
+import { credentialsTable, invitationsTable, userTable } from "./schema";
 
 // Signup. One transactional mutation: (optionally) validate the invitation,
 // create the user + credential, (optionally) consume the invitation, and mint a
@@ -93,12 +87,9 @@ export const signUpWithInvitation = publicMutation
 				.where(eq(invitationsTable.id, invitationId));
 		}
 
-		const sessionToken = generateSessionToken();
-		await ctx.orm.insert(sessionTable).values({
-			token: sessionToken,
-			userId,
-			expiresAt: new Date(Date.now() + SESSION_TTL_MS),
-		});
+		// Mints the session row, stamped with the request's IP / User-Agent.
+		// Still inside the same transaction as the user + credential inserts.
+		const sessionToken = await createSession(ctx, userId);
 
 		return ok({ sessionToken });
 	});

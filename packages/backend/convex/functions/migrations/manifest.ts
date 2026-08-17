@@ -4,4 +4,6 @@
 
 import { defineMigrationSet } from "kitcn/orm";
 
-export const migrations = defineMigrationSet([]);
+import { migration as migration_0 } from "./20260816_234850_backfill_session_status";
+
+export const migrations = defineMigrationSet([migration_0]);

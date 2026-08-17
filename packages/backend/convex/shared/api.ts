@@ -17,7 +17,12 @@ export const api = {
     revoke: createApiLeaf<"mutation", typeof import("../functions/invitations").revoke>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").revoke>("invitations:revoke"), { type: "mutation" }),
   },
   session: {
+    countByUser: createApiLeaf<"query", typeof import("../functions/session").countByUser>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/session").countByUser>("session:countByUser"), { type: "query" }),
+    heartbeat: createApiLeaf<"mutation", typeof import("../functions/session").heartbeat>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").heartbeat>("session:heartbeat"), { type: "mutation" }),
+    listByUser: createApiLeaf<"query", typeof import("../functions/session").listByUser>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/session").listByUser>("session:listByUser"), { type: "query" }),
     me: createApiLeaf<"query", typeof import("../functions/session").me>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/session").me>("session:me"), { type: "query" }),
+    revoke: createApiLeaf<"mutation", typeof import("../functions/session").revoke>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").revoke>("session:revoke"), { type: "mutation" }),
+    revokeAllForUser: createApiLeaf<"mutation", typeof import("../functions/session").revokeAllForUser>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").revokeAllForUser>("session:revokeAllForUser"), { type: "mutation" }),
     signIn: createApiLeaf<"mutation", typeof import("../functions/session").signIn>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signIn>("session:signIn"), { type: "mutation" }),
     signOut: createApiLeaf<"mutation", typeof import("../functions/session").signOut>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/session").signOut>("session:signOut"), { type: "mutation" }),
   },
@@ -27,6 +32,11 @@ export const api = {
   },
   signup: {
     signUpWithInvitation: createApiLeaf<"mutation", typeof import("../functions/signup").signUpWithInvitation>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/signup").signUpWithInvitation>("signup:signUpWithInvitation"), { type: "mutation" }),
+  },
+  users: {
+    count: createApiLeaf<"query", typeof import("../functions/users").count>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").count>("users:count"), { type: "query" }),
+    get: createApiLeaf<"query", typeof import("../functions/users").get>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").get>("users:get"), { type: "query" }),
+    list: createApiLeaf<"query", typeof import("../functions/users").list>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").list>("users:list"), { type: "query" }),
   },
   http: undefined as unknown as typeof httpRouter,
   _http: {

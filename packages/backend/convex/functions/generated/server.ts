@@ -34,11 +34,11 @@ const ormSchema = schema;
 
 registerProcedureNameLookup(
   {
-  "invitations.ts": [{ column: 51, line: 99, name: "invitations:count" }, { column: 2, line: 137, name: "invitations:create" }, { column: 2, line: 47, name: "invitations:list" }, { column: 2, line: 197, name: "invitations:revoke" }],
-  "session.ts": [{ column: 49, line: 69, name: "session:me" }, { column: 2, line: 20, name: "session:signIn" }, { column: 2, line: 59, name: "session:signOut" }],
+  "invitations.ts": [{ column: 51, line: 75, name: "invitations:count" }, { column: 2, line: 113, name: "invitations:create" }, { column: 2, line: 23, name: "invitations:list" }, { column: 2, line: 173, name: "invitations:revoke" }],
+  "session.ts": [{ column: 2, line: 198, name: "session:countByUser" }, { column: 2, line: 95, name: "session:heartbeat" }, { column: 2, line: 131, name: "session:listByUser" }, { column: 49, line: 111, name: "session:me" }, { column: 2, line: 223, name: "session:revoke" }, { column: 2, line: 269, name: "session:revokeAllForUser" }, { column: 2, line: 31, name: "session:signIn" }, { column: 2, line: 70, name: "session:signOut" }],
   "settings.ts": [{ column: 51, line: 15, name: "settings:getRegistrationSettings" }, { column: 2, line: 33, name: "settings:setRequireInvitationCode" }],
-  "signup.ts": [{ column: 2, line: 30, name: "signup:signUpWithInvitation" }],
-  "users.ts": [{ column: 2, line: 20, name: "users:bootstrapAdmin" }],
+  "signup.ts": [{ column: 2, line: 24, name: "signup:signUpWithInvitation" }],
+  "users.ts": [{ column: 2, line: 32, name: "users:bootstrapAdmin" }, { column: 51, line: 155, name: "users:count" }, { column: 2, line: 165, name: "users:get" }, { column: 2, line: 79, name: "users:list" }],
 },
   "convex/functions"
 );

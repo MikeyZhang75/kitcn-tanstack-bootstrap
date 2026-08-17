@@ -3,6 +3,7 @@ import {
 	clearSessionToken,
 	getSessionToken,
 } from "@repo/app-convex/session-store";
+import { useSessionHeartbeat } from "@repo/app-convex/use-heartbeat";
 import { useSession } from "@repo/app-convex/use-session";
 import {
 	createFileRoute,
@@ -39,6 +40,11 @@ function AuthenticatedLayout() {
 	// `useBreakpoint` 首帧返回空对象，所以显式和 `false` 比较：未知时按桌面处理。
 	const isMobile = screens.lg === false;
 	const [collapsed, setCollapsed] = useState(false);
+
+	// 心跳是 `session.lastSeenAt` 的唯一写入方（Convex 的 query 不能写库，而已鉴权
+	// 流量几乎全是 query）。放在这里是因为它正好覆盖「登录后停留在应用内」的整个
+	// 时段；hook 内部只在标签页可见时打点。
+	useSessionHeartbeat();
 
 	useEffect(() => {
 		// 越过 lg 断点时自动跟随；用户之后仍可用 header 上的按钮手动切换。

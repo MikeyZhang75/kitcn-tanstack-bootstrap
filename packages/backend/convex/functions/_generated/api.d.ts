@@ -42,7 +42,37 @@ export declare const api: {
     >;
   };
   session: {
+    countByUser: FunctionReference<
+      "query",
+      "public",
+      { sessionToken: string; userId: string },
+      any
+    >;
+    heartbeat: FunctionReference<
+      "mutation",
+      "public",
+      { sessionToken: string },
+      any
+    >;
+    listByUser: FunctionReference<
+      "query",
+      "public",
+      { page: number; pageSize: number; sessionToken: string; userId: string },
+      any
+    >;
     me: FunctionReference<"query", "public", { sessionToken: string }, any>;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { id: string; sessionToken: string },
+      any
+    >;
+    revokeAllForUser: FunctionReference<
+      "mutation",
+      "public",
+      { sessionToken: string; userId: string },
+      any
+    >;
     signIn: FunctionReference<
       "mutation",
       "public",
@@ -70,6 +100,21 @@ export declare const api: {
       "mutation",
       "public",
       { invitationCode?: string; password: string; username: string },
+      any
+    >;
+  };
+  users: {
+    count: FunctionReference<"query", "public", { sessionToken: string }, any>;
+    get: FunctionReference<
+      "query",
+      "public",
+      { id: string; sessionToken: string },
+      any
+    >;
+    list: FunctionReference<
+      "query",
+      "public",
+      { page: number; pageSize: number; sessionToken: string },
       any
     >;
   };
