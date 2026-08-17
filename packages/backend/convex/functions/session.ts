@@ -2,18 +2,18 @@ import { eq } from "kitcn/orm";
 
 import { createSession } from "../lib/create-session";
 import { authMutation, authQuery, publicMutation } from "../lib/crpc";
+import { endUserSessions } from "../lib/end-user-sessions";
 import { resolveUsernames } from "../lib/orm-helpers";
 import { verifyPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
 import {
 	countUserSessionsInputSchema,
-	DEFAULT_SESSION_STATUS,
 	LAST_SEEN_THROTTLE_MS,
 	listUserSessionsInputSchema,
 	revokeSessionInputSchema,
 	revokeUserSessionsInputSchema,
+	SESSION_ALREADY_ENDED_MESSAGES,
 	SESSION_COUNT_SCAN_MAX,
-	SESSION_REVOKE_BATCH_MAX,
 	signOutInputSchema,
 } from "../shared/tables/session";
 import { signInInputSchema, USER_ROLES } from "../shared/tables/user";
@@ -72,7 +72,7 @@ export const signOut = publicMutation
 			where: { token: input.sessionToken },
 			columns: { id: true, status: true },
 		});
-		if (session && (session.status ?? DEFAULT_SESSION_STATUS) === "active") {
+		if (session?.status === "active") {
 			await ctx.orm
 				.update(sessionTable)
 				.set({ status: "signed_out", endedAt: new Date() })
@@ -165,7 +165,6 @@ export const listByUser = authQuery
 		return ok({
 			items: items.map((row) => ({
 				...row,
-				status: row.status ?? DEFAULT_SESSION_STATUS,
 				revokedByName: row.revokedBy
 					? (revokerNames.get(row.revokedBy) ?? null)
 					: null,
@@ -228,11 +227,12 @@ export const revoke = authMutation
 		if (!session) {
 			throw error("NOT_FOUND", "会话不存在");
 		}
-		const status = session.status ?? DEFAULT_SESSION_STATUS;
-		if (status !== "active") {
+		if (session.status !== "active") {
+			// Exhaustive map rather than a ternary: a status added later would
+			// otherwise be silently mislabeled 已终止 with no compile error.
 			throw error(
 				"BAD_REQUEST",
-				status === "signed_out" ? "该会话已退出" : "该会话已终止",
+				SESSION_ALREADY_ENDED_MESSAGES[session.status],
 			);
 		}
 		// An already-lapsed session is dead anyway, and stamping `revokedBy` on it
@@ -260,53 +260,20 @@ export const revoke = authMutation
 // their own account means "sign out my other devices", not "lock me out". When
 // the target is somebody else the exclusion never matches, so it costs nothing.
 //
-// Capped at SESSION_REVOKE_BATCH_MAX per call — Convex mutations are bounded
-// transactions — and the response reports how many were actually ended rather
-// than implying the account is fully drained.
+// The loop itself (the load-bearing `orderBy`, the skip-expired guard, the
+// batch cap) lives in lib/end-user-sessions.ts, shared with the two password
+// procedures. The response reports how many were actually ended rather than
+// implying the account is fully drained.
 export const revokeAllForUser = authMutation
 	.requires(["admin"])
 	.input(revokeUserSessionsInputSchema)
 	.mutation(async ({ ctx, input }) => {
-		const sessions = await ctx.orm.query.session.findMany({
-			where: (fields, { eq }) => eq(fields.userId, input.userId as Id<"user">),
-			// `orderBy` is load-bearing, not cosmetic: the default order is
-			// `_creationTime` ASCENDING, so a bare `limit` would take the user's
-			// OLDEST rows. Since rows are never deleted, a long-lived account
-			// accumulates ended sessions and the live ones — always the newest —
-			// would fall outside the window, making 全部踢下线 silently revoke
-			// nothing.
-			//
-			// ⚠️ Since kitcn 0.25, `orderBy` is only pushed down into Convex's
-			// `.order()` when the selected index is FULLY PINNED by `eq` filters
-			// (as `eq(userId, …)` pins the single-field `userId` index here).
-			// Add a range filter (gt/gte/lt/lte) on an indexed column, or widen
-			// that index into a compound one in schema.ts, and the pushdown
-			// silently stops: `limit` degrades from a read bound into a
-			// post-fetch slice over a `collect()` of every matching row.
-			orderBy: { createdAt: "desc" },
-			columns: { id: true, status: true, expiresAt: true },
-			limit: SESSION_REVOKE_BATCH_MAX,
+		const revoked = await endUserSessions(ctx, {
+			userId: input.userId as Id<"user">,
+			status: "revoked",
+			exceptSessionId: ctx.session.id,
+			revokedBy: ctx.user.id as Id<"user">,
 		});
 
-		const now = Date.now();
-		const targets = sessions.filter(
-			(session) =>
-				(session.status ?? DEFAULT_SESSION_STATUS) === "active" &&
-				// Skip already-lapsed rows: they're dead, and stamping `revokedBy`
-				// on them would claim an admin ended something that expired on
-				// its own.
-				session.expiresAt.getTime() > now &&
-				session.id !== ctx.session.id,
-		);
-
-		const endedAt = new Date();
-		const revokedBy = ctx.user.id as Id<"user">;
-		for (const session of targets) {
-			await ctx.orm
-				.update(sessionTable)
-				.set({ status: "revoked", endedAt, revokedBy })
-				.where(eq(sessionTable.id, session.id));
-		}
-
-		return ok({ revoked: targets.length });
+		return ok({ revoked });
 	});

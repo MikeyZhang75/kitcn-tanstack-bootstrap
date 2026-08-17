@@ -46,7 +46,7 @@ The three first-party wrappers that used to live in `@repo/ui/components/custom-
 | `DataTable` + `DataTablePager` | `<Table>` with the `pagination` prop (`showSizeChanger`, `showTotal`, `pageSizeOptions`)                       |
 | `NavUser`                      | `apps/*/src/components/nav-user.tsx` — per-app now, composed from `Dropdown` + `Avatar` + `Button type="text"` |
 
-`nav-user.tsx` is duplicated byte-for-byte across both apps (like `providers.tsx` and `_public.tsx` — see [frontend architecture](frontend-architecture.md)); **mirror any edit into both apps in the same commit.**
+`nav-user.tsx` is duplicated byte-for-byte across both apps (like `providers.tsx`, `change-password-dialog.tsx`, and `_public.tsx` — the full verified list is in [frontend architecture](frontend-architecture.md)); **mirror any edit into both apps in the same commit.** Its menu is dispatched by `key` in `handleMenuClick`; that handler used to hard-`return` on anything but `"signout"`, so if you add an item, add a branch too or it will silently do nothing.
 
 #### Server-driven tables
 
@@ -77,7 +77,7 @@ Forms use antd `Form` + `Form.Item` (the hand-rolled `useReducer` form state is 
 ```tsx
 import { signInInputSchema } from "@repo/backend/shared/tables/user";
 
-import { zodStringRule } from "./-lib/zod-rule";
+import { zodStringRule } from "@/lib/zod-rule";
 
 <Form.Item
 	label="用户名"
@@ -88,7 +88,29 @@ import { zodStringRule } from "./-lib/zod-rule";
 </Form.Item>;
 ```
 
-`zodStringRule` (`apps/*/src/routes/_public/-lib/zod-rule.ts`, mirrored in both apps) wraps a `ZodType` in an antd `FormRule` validator and coerces `undefined → ""`, so the "field is empty" case also surfaces the schema's own Chinese message (e.g. 用户名至少 3 个字符) rather than antd's generic `required` template. This is the [one-source-of-truth rule](conventions.md) applied to forms: length/charset constraints and their messages are declared once, in `packages/backend/convex/shared/tables/*.ts`.
+`zodStringRule` (`apps/*/src/lib/zod-rule.ts`, mirrored in both apps) wraps a `ZodType` in an antd `FormRule` validator and coerces `undefined → ""`, so the "field is empty" case also surfaces the schema's own Chinese message (e.g. 用户名至少 3 个字符) rather than antd's generic `required` template. This is the [one-source-of-truth rule](conventions.md) applied to forms: length/charset constraints and their messages are declared once, in `packages/backend/convex/shared/tables/*.ts`.
+
+**Cross-field rules can't go through `zodStringRule`** — it takes one `ZodType` and one value. Use antd's function-form rule (`RuleRender`) alongside it, plus `dependencies` so the field revalidates when its partner changes. The confirm-password pattern, from `change-password-dialog.tsx`:
+
+```tsx
+<Form.Item
+	dependencies={["newPassword"]}
+	label="确认新密码"
+	name="confirmPassword"
+	rules={[newPasswordRule, confirmPasswordRule]}
+>
+```
+
+```tsx
+const confirmPasswordRule: FormRule = ({ getFieldValue }) => ({
+	validator: (_rule, value: unknown) =>
+		!value || getFieldValue("newPassword") === value
+			? Promise.resolve()
+			: Promise.reject(new Error("两次输入的密码不一致")),
+});
+```
+
+That Chinese string is the rare case that legitimately lives at the call site rather than in a shared schema: `confirmPassword` is never sent to the backend, so no canonical schema declares it. Don't push the check into the backend schema either — a top-level `.refine()` on a procedure input bypasses the error envelope (see [auth](auth.md) 「密码管理」).
 
 Non-string fields need a local variant rather than `zodStringRule` (which coerces to `""`): see `countRule` in `invitations/-components/create-invitation-dialog.tsx`, which hands `InputNumber`'s value — `null` when the field is cleared — straight to `createInvitationInputSchema.shape.count`, so "没填" surfaces the schema's own Chinese message. That's why the schema declares `z.number("请输入创建数量")`: the type-level message is what a cleared field hits.
 

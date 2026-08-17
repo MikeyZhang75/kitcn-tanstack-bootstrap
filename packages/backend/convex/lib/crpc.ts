@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { MutationCtx, QueryCtx } from "../functions/generated/server";
 import { initCRPC } from "../functions/generated/server";
 import {
-	DEFAULT_SESSION_STATUS,
+	SESSION_ENDED_MESSAGES,
 	sessionTokenSchema,
 } from "../shared/tables/session";
 import { type UserRole } from "../shared/tables/user";
@@ -64,18 +64,18 @@ async function resolveSession(
 	if (!session) {
 		throw error("UNAUTHORIZED", "未登录");
 	}
-	// Rows are never deleted — sign-out and admin revocation flip `status`, so
-	// this check is what actually ends a session. Distinct messages so a kicked
-	// user isn't told they simply expired.
-	// TODO(migration): the `??` tolerates rows written before `status` existed
-	// (they were active); drop it once `backfill_session_status` has run and the
-	// column is hardened to `.notNull()`.
-	const status = session.status ?? DEFAULT_SESSION_STATUS;
-	if (status === "revoked") {
-		throw error("UNAUTHORIZED", "会话已被管理员终止，请重新登录");
-	}
-	if (status === "signed_out") {
-		throw error("UNAUTHORIZED", "会话已退出，请重新登录");
+	// Rows are never deleted — sign-out, admin revocation, and a password change
+	// all flip `status`, so this check is what actually ends a session. Distinct
+	// messages so a kicked user isn't told they simply expired.
+	//
+	// ⚠️ This MUST stay an allow-list (`!== "active"` + an exhaustive message
+	// map), never a chain of `=== "revoked"` / `=== "signed_out"` tests. It used
+	// to be the latter, which meant any status added later fell straight through
+	// and remained a fully valid credential — with no TypeScript error anywhere.
+	// As written, adding a `SESSION_STATUSES` member fails to compile until
+	// `SESSION_ENDED_MESSAGES` covers it.
+	if (session.status !== "active") {
+		throw error("UNAUTHORIZED", SESSION_ENDED_MESSAGES[session.status]);
 	}
 	if (session.expiresAt.getTime() <= Date.now()) {
 		throw error("UNAUTHORIZED", "会话已过期，请重新登录");

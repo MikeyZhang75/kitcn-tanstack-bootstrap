@@ -20,7 +20,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { App, Button, Card, Flex, Form, Input, Typography } from "antd";
 import { useState } from "react";
 
-import { zodStringRule } from "./-lib/zod-rule";
+import { zodStringRule } from "@/lib/zod-rule";
 
 type AuthSearch = {
 	callbackUrl?: string;

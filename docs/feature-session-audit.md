@@ -1,16 +1,16 @@
 ### Session audit: status state machine, IP/UA capture, liveness, revocation
 
-Session rows are **never deleted**. Sign-out and admin revocation both flip a
-`status` column, so the `session` table _is_ the login audit trail. Each row
-also records the IP / User-Agent it was created from and the last time the
-client was seen alive. Admins browse and revoke sessions from the dashboard
-`/users` page.
+Session rows are **never deleted**. Sign-out, admin revocation, and a password
+change all flip a `status` column, so the `session` table _is_ the login audit
+trail. Each row also records the IP / User-Agent it was created from and the
+last time the client was seen alive. Admins browse and revoke sessions from the
+dashboard `/users` page.
 
 > History: an earlier iteration deleted the row on sign-out and compensated
 > with a separate append-only `loginLog` table. The status machine subsumes it,
 > and that table is gone.
 
-#### Storage — one table, four display states
+#### Storage — one table, five display states
 
 `sessionTable` (`packages/backend/convex/functions/schema.ts`):
 
@@ -18,22 +18,42 @@ client was seen alive. Admins browse and revoke sessions from the dashboard
 | ------------------------- | ------------------------------------------------------------ |
 | `token`                   | unique bearer credential, 64 hex chars                       |
 | `userId`                  | FK → user                                                    |
-| `status`                  | `active` \| `signed_out` \| `revoked`                        |
+| `status`                  | `active` \| `signed_out` \| `revoked` \| `password_changed`  |
 | `expiresAt`               | absolute, 30 days from creation                              |
 | `lastSeenAt`              | bumped only by `session.heartbeat`; null until the first one |
-| `endedAt`                 | when the row left `active`, either path                      |
-| `revokedBy`               | admin who kicked it; null for a self-service sign-out        |
+| `endedAt`                 | when the row left `active`, by any path                      |
+| `revokedBy`               | admin who ended it; null when the user drove it themselves   |
 | `ipAddress` / `userAgent` | request attribution at mint time                             |
+
+`password_changed` is written when the account's password changes — by its owner
+(`account.changePassword`) or by an admin reset (`users.resetPassword`). It is a
+distinct status rather than a reuse of the other two because both alternatives
+lie in the message the middleware shows the ejected device: `signed_out` tells a
+device that never signed out that it did, and `revoked` tells someone whose
+password an admin just reset that they were terminated — i.e. banned — rather
+than that they need the new password. See [auth](auth.md) 「密码管理」.
 
 **"Expired" is deliberately not a status.** It's derived by comparing
 `expiresAt` against the current time — materialising it would need a cron to
 flip rows and buy nothing, since the auth middleware checks both. The UI
-therefore renders four states (活跃 / 已过期 / 已退出 / 已终止) from three
-stored ones; `resolveDisplayStatus` in the dashboard slice's `-model/` owns
-that derivation.
+therefore renders five states (活跃 / 已过期 / 已退出 / 已终止 / 密码已修改)
+from four stored ones; `resolveDisplayStatus` in the dashboard slice's `-model/`
+owns that derivation.
 
-`index("userId")` is load-bearing now — it backs both the per-user session list
-and the `/users` active-session summary.
+⚠️ Adding a status is only safe because `resolveSession` is an **allow-list**
+(`status !== "active"` plus the exhaustive `SESSION_ENDED_MESSAGES` record).
+It used to be a chain of `=== "revoked"` / `=== "signed_out"` tests, under which
+a newly added status fell through and stayed a fully valid credential with no
+TypeScript error. Never reintroduce that shape. `session.revoke`'s "already
+ended" message uses the same exhaustive-record trick
+(`SESSION_ALREADY_ENDED_MESSAGES`).
+
+Two indexes are load-bearing. `index("userId")` backs the per-user session list
+and the `/users` active-session summary, both of which read a user's rows
+regardless of status. `index("userId_status")` backs bulk termination — see
+「Revocation」 below for why the compound form is what makes the batch cap a batch
+rather than a ceiling. (`index("expiresAt")` is declared but currently unused by
+any query.)
 
 #### Where IP / User-Agent come from — `ctx.meta.getRequestMetadata()`
 
@@ -151,26 +171,75 @@ admin using it on their own account means "sign out my other devices", not
 "lock me out"; when the target is someone else the exclusion never matches, so
 it costs nothing. The dialog says so when the target is you.
 
+##### `lib/end-user-sessions.ts` — the one bulk-termination loop
+
+`endUserSessions(ctx, { userId, status, exceptSessionId?, revokedBy? })` is the
+single implementation, shared by **three** callers: `session.revokeAllForUser`
+(`revoked`, excluding self), `account.changePassword` (`password_changed`, no
+`revokedBy`), and `users.resetPassword` (`password_changed`, no exclusion,
+stamped with the admin). It was extracted precisely because the loop is dense
+with non-obvious invariants that three copies would drift on.
+
+`account.changePassword` passes `exceptSessionId` only so the returned count
+reads as 「其他 N 个设备」; it then ends its own session separately and mints a
+replacement, so a password change leaves **no** pre-existing token valid. See
+[auth](auth.md) 「密码管理」 for why rotating the caller's own token matters.
+
+`revokedBy` is written **only when passed**. It means "an admin ended this", so
+a self-service password change must not set it — and kitcn only enforces a
+foreign key when its column is in the write set, so omitting it also saves one
+`db.get` per row.
+
 Capped at `SESSION_REVOKE_BATCH_MAX` (200) per call — Convex mutations are
-bounded transactions — and the response reports what it actually revoked rather
-than implying the account is fully drained.
+bounded transactions — and every caller reports what it actually ended. One
+number for all three on purpose: a smaller cap was considered for the
+change-password path (it also pays two scrypt hashes) but the budget says
+otherwise — Convex's 1-second limit counts user code only, two scrypt runs
+measure ~73 ms locally, and 200 rows costs ~401 index-range reads against a
+4,096 ceiling.
 
-⚠️ **`orderBy: { createdAt: "desc" }` on that query is load-bearing, not
-cosmetic.** kitcn compiles a bare `eq(userId, …)` to `withIndex(...).take(n)`
-with Convex's default **ascending** order, so without it the cap would select
-the user's _oldest_ rows. Since rows are never deleted, any long-lived account
-accumulates ended sessions and the live ones — always newest — would fall
-outside the window, making 全部踢下线 silently revoke nothing while reporting
-success. The same reasoning applies to the `users.list` summary below.
+It is a genuine **batch size**: the window is "the 200 newest rows whose status
+is still `active`", so every row a call ends leaves the window and the next call
+picks up the next 200. That property is what the `userId_status` compound index
+buys, and it is the whole reason the index exists — see below.
 
-⚠️ **Since kitcn 0.25, that pushdown is conditional.** `orderBy` is only
-translated into Convex's `.order()` when the selected index is **fully pinned by
-`eq` filters** — which `eq(userId, …)` is, against the single-field `userId`
-index. Add a range filter (`gt`/`gte`/`lt`/`lte`) on an indexed column, or widen
-a single-field index in `schema.ts` into a compound one, and the pushdown
-silently stops: kitcn falls back to a post-fetch JS sort, and `limit` degrades
-from a read bound into a slice over a `collect()` of every matching row. Every
-query in this feature is verified safe today; the trap is in _editing_ them.
+The query is `and(eq(userId, …), eq(status, "active"))`. Both equalities land in
+the index range: kitcn's `splitFilters` walks the chosen index's fields in order
+and consumes one `eq` per field, so nothing falls through to a post-fetch
+`.filter()` and `limit` is a real read bound. Keep the clause order matching the
+index's field order — kitcn scores an index by how its fields line up with the
+referenced ones.
+
+⚠️ **`orderBy: { createdAt: "desc" }` is still load-bearing, for a subtler
+reason than before.** Convex's default order is `_creationTime` ascending, so
+without it the batch would take the user's _oldest_ still-`active` rows — and
+those are exactly the expired ones. `expiresAt` is `createdAt + SESSION_TTL_MS`
+with a constant TTL, so "expired" is equivalent to "older", and expiry is never
+materialised into `status`; the in-memory expired-row guard would then drop
+every row the query returned and the call would end nothing while reporting
+success. Descending puts every live row ahead of every expired one. That
+equivalence is what a per-session TTL would break — if `SESSION_TTL_MS` stops
+being a constant, revisit this. The `users.list` summary below relies on
+"newest first" for its own reasons.
+
+> History: this used to filter on `userId` alone and sort the status out in
+> memory, which made the 200 a hard ceiling rather than a batch size — a second
+> call re-read the same 200 now-terminal rows and ended zero, so any live
+> session older than 200 others was permanently unreachable by every path
+> sharing this helper, reachable deliberately with 201 `session.signIn` calls.
+> Fixing it needed the `status` column hardened to `.notNull()` first, since an
+> indexed equality on `"active"` would otherwise have skipped pre-backfill rows.
+
+⚠️ **Since kitcn 0.25, that pushdown is conditional.** `orderBy` reaches
+Convex's `.order()` only when **every field of the chosen index is consumed by an
+`eq`** — which is exactly what the two equalities above do to
+`("userId", "status")`. Widening an index is therefore safe _as long as the added
+field is also pinned_; what breaks it is leaving one field unpinned, or loosening
+one into a range (`gt`/`gte`/`lt`/`lte`). Then kitcn falls back to a post-fetch JS
+sort, `limit` degrades from a read bound into a slice over a `collect()` of every
+matching row — and the batch size quietly becomes the hard ceiling the history
+note above describes. Every query in this feature is verified safe today; the
+trap is in _editing_ them.
 
 `listByUser` also returns `isCurrent` per row (derived from `ctx.session.id`,
 never from the token) so the UI can tag the admin's own session 本机 and warn
@@ -240,16 +309,18 @@ index.tsx                                用户列表
 -model/pagination.ts                     分页 reducer
 -model/user-row.ts
 -model/session-row.ts                    含 resolveDisplayStatus / isRevocable
-$userId/index.tsx                        用户详情 + 会话表 + 全部踢下线
+$userId/index.tsx                        用户详情 + 会话表 + 全部踢下线 + 重置密码
 $userId/-components/user-sessions-table.tsx
 $userId/-components/session-status-badge.tsx
 $userId/-components/revoke-session-dialog.tsx
 $userId/-components/revoke-all-dialog.tsx
+$userId/-components/reset-password-dialog.tsx
 ```
 
 `$userId/` is nested inside the `users/` slice and shares the parent's `-lib/`
-and `-model/` — the same pattern as `_public/-lib/zod-rule.ts` being shared by
-routes under `_public`.
+and `-model/`. (Helpers used from OUTSIDE a route subtree don't belong in a
+`-`-prefixed folder at all — that's why `zod-rule.ts`, which the change-password
+dialog under `src/components/` also needs, lives at `src/lib/`.)
 
 Details worth not breaking:
 
@@ -262,6 +333,9 @@ Details worth not breaking:
   the table querying a dead offset.
 - The UA cell is `Typography.Text ellipsis` inside a `Tooltip` — **no UA parsing
   library**; the raw string is what an auditor wants.
+- 「重置密码」 is disabled (with a Tooltip) when the admin is viewing their own
+  detail page. The backend rejects self-target too — that rejection is the
+  security boundary, not the button state. See [auth](auth.md) 「密码管理」.
 - Sidebar entry: 用户 → `/users`.
 
 #### Schema-change procedure
@@ -269,18 +343,32 @@ Details worth not breaking:
 `lastSeenAt` / `endedAt` / `revokedBy` are optional → no migration (see
 `docs/MIGRATION.md`).
 
-`status` is the exception and is currently **still nullable** with a
-`?? DEFAULT_SESSION_STATUS` fallback in `lib/crpc.ts`, `functions/session.ts`
-and `functions/users.ts`, plus a `TODO(migration)` in `schema.ts`. The
-`20260816_234850_backfill_session_status` migration sets `active` on
-pre-existing rows (every row that survived the old delete-on-sign-out design
-was by definition active). It has been run against dev. **Harden the column to
-`.notNull()` and delete the `??` fallbacks only after the backfill has run
-against production** — that's the second half of `docs/MIGRATION.md`'s
-required-field flow, and it must be triggered manually because this repo has no
-CI workflow.
+`status` was the exception, and its required-field flow is now **complete**.
+`20260816_234850_backfill_session_status` set `active` on pre-existing rows
+(every row that survived the old delete-on-sign-out design was by definition
+active); the column is `.notNull()` and every `?? DEFAULT_SESSION_STATUS`
+fallback is gone. `DEFAULT_SESSION_STATUS` itself stays — `lib/create-session.ts`
+uses it as the initial value of a new row, which is not a fallback.
+
+The hardening is what unblocked the `userId_status` index, since an indexed
+equality on `"active"` would have skipped any row still carrying a null.
+
+⚠️ **The migration's `down` direction is no longer usable.** It writes
+`status: undefined`, which the hardened schema rejects. Don't "fix" the
+migration file either: kitcn's `computeMigrationChecksum` hashes the
+`migrateOne` source, so editing an already-applied migration trips checksum
+drift. Rolling back means un-hardening the column first.
+
+This repo has no CI workflow, so any future migration step is triggered by hand
+— see `docs/MIGRATION.md`.
 
 #### Known limitations
+
+- **`session.signIn` is unauthenticated and unthrottled**, so anyone holding a
+  password can mint session rows at will. Bulk termination drains across
+  repeated calls now, so those rows are all reachable — but nothing stops the
+  minting itself. That's the rate-limiting gap recorded in [auth](auth.md), not
+  a revocation gap.
 
 - **Nothing prunes the table.** Rows are never deleted by design, so `session`
   grows monotonically. A retention cron is a reasonable follow-up.

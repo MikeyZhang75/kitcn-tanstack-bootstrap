@@ -43,15 +43,23 @@ plumbing. Two consequences:
 Five tables in `schema.ts` (all plain app tables — kitcn manages none of them):
 
 - `user` — `username` (unique, lowercased login handle), `name` (display), `role`.
-- `credentials` — `userId` (unique FK → user), `passwordHash`. Kept separate
-  from `user` so user projections never carry the hash.
+- `credentials` — `userId` (unique FK → user), `passwordHash`, plus nullable
+  `passwordUpdatedAt` / `passwordUpdatedBy` (password-change audit; the acting
+  admin for a forced reset, the user themselves for a self-service change).
+  Kept separate from `user` so user projections never carry the hash. It
+  declares **no explicit index**: `.unique()` on `userId` already materialises
+  `credentials_userId_unique`, so the by-userId lookups are index-backed and
+  adding `index("userId")` would just double the write cost.
 - `session` — `token` (unique, 64 hex chars), `userId` (FK → user), `status`
-  (`active` | `signed_out` | `revoked`), `expiresAt`, plus nullable
-  `lastSeenAt` / `endedAt` / `revokedBy` / `ipAddress` / `userAgent`.
-  **Rows are never deleted** — sign-out and admin revocation both flip
-  `status`, which is what makes this table the login audit trail. `status` +
-  `expiresAt` are the source of truth; there is nothing to cryptographically
-  verify. `ipAddress` / `userAgent` come from `ctx.meta.getRequestMetadata()`
+  (non-null: `active` | `signed_out` | `revoked` | `password_changed`),
+  `expiresAt`, plus nullable `lastSeenAt` / `endedAt` / `revokedBy` /
+  `ipAddress` / `userAgent`. Indexed on `userId` and on `("userId", "status")` —
+  the compound one backs bulk termination and is why `status` had to be hardened
+  to `.notNull()` first.
+  **Rows are never deleted** — sign-out, admin revocation, and a password change
+  all flip `status`, which is what makes this table the login audit trail.
+  `status` + `expiresAt` are the source of truth; there is nothing to
+  cryptographically verify. `ipAddress` / `userAgent` come from `ctx.meta.getRequestMetadata()`
   at mint time and are **audit telemetry only** (the IP is client-spoofable);
   `lastSeenAt` is written solely by the `session.heartbeat` mutation. Full
   model in [session audit](feature-session-audit.md).
@@ -93,9 +101,15 @@ new hashes) and compares in constant time.
   - `revoke` / `revokeAllForUser` (`authMutation.requires(["admin"])`) — 踢下线.
     `revokeAllForUser` always excludes the calling admin's own session.
   - See [session audit](feature-session-audit.md) for all of the above.
+- `convex/functions/account.ts` — `changePassword`
+  (`authMutation.requires(USER_ROLES)`), the self-service path. See 密码管理
+  below.
 - `convex/functions/users.ts` — besides `bootstrapAdmin` (below), `list` /
   `count` / `get` (`authQuery.requires(["admin"])`) back the dashboard `/users`
-  page.
+  page, and `resetPassword` (`authMutation.requires(["admin"])`) is the admin
+  force-reset. `get` also projects the target's `passwordUpdatedAt` /
+  `passwordUpdatedBy` (resolved to a username) for the detail header — never
+  `passwordHash`.
 - `convex/functions/signup.ts` — `signUpWithInvitation` (`publicMutation`):
   one atomic transaction creates the user + credential, mints a session (same
   `createSession` helper), and returns `ok({ sessionToken })` (the client is
@@ -118,15 +132,116 @@ new hashes) and compares in constant time.
 - `convex/functions/users.ts` — `bootstrapAdmin` (`privateMutation`), cold-start
   (below).
 
+#### 密码管理 (password management)
+
+Two procedures, deliberately separate because they have different
+authorization and different proof requirements.
+
+**`account.changePassword`** (`authMutation.requires(USER_ROLES)`, input
+`changePasswordInputSchema`) — the signed-in user changes their own.
+
+- **The current password is required.** Not generic hygiene: the session token
+  is a bearer credential in `localStorage` with a 30-day _absolute_ TTL, there
+  is no re-authentication or auth-recency signal anywhere in the app, and there
+  is no email / reset flow / second factor to recover through. Without the
+  proof, possession of a lifted token converts into permanent ownership of the
+  account, unrecoverably.
+- The target is always `ctx.user.id`. It is **never** an input field — an
+  input-supplied target on a `requires(USER_ROLES)` procedure is a
+  horizontal-privilege-escalation hole.
+- Body order matters and is deliberate: read the credential → `verifyPassword`
+  (bail here, so a wrong guess costs **one** scrypt run rather than two) →
+  reject `newPassword === currentPassword` by **plaintext** comparison (the
+  previous step already proved the current one, so a third scrypt run would buy
+  nothing) → `hashPassword` → write → _then_ end the other sessions.
+- Ending the other sessions is last on purpose: it establishes the OCC read set
+  over the hot `session` table (which `heartbeat` writes to), and a conflict
+  retry re-runs the whole mutation including both hashes.
+- Wrong current password is `BAD_REQUEST "当前密码错误"`, **not**
+  `UNAUTHORIZED` — that code is reserved for a dead session and the frontend
+  reads it that way. Naming the wrong field leaks nothing here: the caller is
+  already authenticated as that exact account, so `signIn`'s deliberately vague
+  message (which avoids handing an _anonymous_ caller a username oracle) has no
+  analogue.
+
+**`users.resetPassword`** (`authMutation.requires(["admin"])`, input
+`resetPasswordInputSchema`) — an admin force-sets someone else's.
+
+- **Self-target is rejected** (`BAD_REQUEST "请通过「修改密码」修改自己的密码"`),
+  and that rejection _is_ the security boundary. This path by design requires no
+  proof of the current password (an admin doesn't have it), so allowing it
+  against your own account would be a one-call bypass of `changePassword`'s
+  requirement above for anyone holding a stolen admin token.
+- The admin supplies the new password; the server does **not** generate one. A
+  generated plaintext would travel back in the cRPC response and land in the
+  TanStack Query cache and devtools.
+- Any role may be targeted, another admin included. ⚠️ Known accepted risk:
+  there is no role hierarchy, no super-admin, no protected account, and
+  `bootstrapAdmin` refuses to run once any admin exists — so one compromised
+  admin token escalates to every admin account with no in-app recovery. The
+  mitigation is attribution, not prevention (`passwordUpdatedBy` + the
+  `revokedBy`-stamped session rows).
+
+**Session termination** is mandatory for both, and is the only invalidation
+channel that exists: `resolveSession` never consults `credentials`, and there is
+no password version or token derivation linking a session to a password. Without
+it a stolen token keeps authorizing every call for the rest of its 30-day TTL —
+i.e. the exact action someone takes on suspected compromise would do nothing.
+
+- Self-service ends **every** session of the account — including the caller's
+  own — and then mints a replacement via `createSession`, returning the fresh
+  token. It writes no `revokedBy`. The returned `revokedSessions` count excludes
+  the caller's own session, so the UI can honestly say 「其他 N 个设备」.
+
+  ⚠️ **Rotating the caller's own token is the point, not an optimisation.**
+  Sparing that row would spare the single most valuable credential in the
+  system: the token string sitting in that browser's `localStorage`, which is
+  precisely what an XSS payload or a minute at an unlocked machine walks away
+  with. A copy of it authenticates as that session for the rest of the 30-day
+  TTL, and "I changed my password" would not touch it — defeating the control
+  for the one device the victim is remediating from. It still means
+  「当前设备保持登录」: the device stays signed in, just on a new credential.
+
+  ⚠️ The client's `onSuccess` must call `setSessionToken(...)` **first, before
+  anything else**. Convex delivers the mutation's result and the `session.me`
+  UNAUTHORIZED in the same React batch (`removeCompleted` only resolves a
+  mutation once the query set has advanced past its timestamp), so swapping the
+  token first re-keys `session.me` to `isPending` and the `_authenticated`
+  gate's "token present but no user" cleanup never fires. Reorder it and the tab
+  bounces to `/auth` right after a successful password change.
+
+- An admin reset ends **all** of the target's sessions, including their live
+  tab, stamped with `revokedBy`, and mints nothing — the target signs in again
+  with the new password.
+- Both write `status: "password_changed"` and go through
+  `lib/end-user-sessions.ts` — the one place that owns the load-bearing
+  `orderBy: { createdAt: "desc" }`, the skip-expired guard, and the
+  `SESSION_REVOKE_BATCH_MAX` cap. `session.revokeAllForUser` uses it too. See
+  [session audit](feature-session-audit.md).
+
+**Neither input schema carries a top-level `.refine()`, and neither should.** It
+would run — zod 4's `.refine()` returns the same `ZodObject`, so kitcn's
+`.shape`-based input merge is unaffected, and `docs/version-bumps.md`'s old
+claim to the contrary is wrong — but kitcn's `parseInput` throws
+`ConvexError({ ZodError })` from _outside_ the handler's try block, bypassing the
+error normalizer; `normalizeError` then finds no `code`/`message` and degrades to
+a generic 「出现错误」 toast, breaking the `{ code, message, data? }` envelope. A
+schema carrying checks also can't be `.extend()`/`.omit()`/`.merge()`d
+afterwards. Cross-field rules go in the procedure body; the confirm-password
+field is form-only and is not declared in `.input()` at all.
+
+Frontend: `apps/*/src/components/change-password-dialog.tsx` (byte-identical in
+both apps, opened from the `nav-user.tsx` user menu) and
+`apps/dashboard/src/routes/_authenticated/users/$userId/-components/reset-password-dialog.tsx`.
+
 #### Authorization (cRPC builders)
 
 `convex/lib/crpc.ts` is the sole authorization model. `authQuery.requires([...])`
 / `authMutation.requires([...])` each `.input(z.object({ sessionToken }))` (so
 Convex's strict arg validator accepts the token) then `.use(...)` middleware
 calls `resolveSession`: look the token up in `session`; reject if missing, if
-`status` is no longer `active` (sign-out or admin revocation — distinct Chinese
-messages), or if past `expiresAt` (all `UNAUTHORIZED`); load the user; enforce
-the allowed roles (`FORBIDDEN`); and inject `ctx.user`
+`status` is no longer `active`, or if past `expiresAt` (all `UNAUTHORIZED`);
+load the user; enforce the allowed roles (`FORBIDDEN`); and inject `ctx.user`
 (`{ id, username, name, role }` — there is no `ctx.userId`, use `ctx.user.id`)
 plus `ctx.session` (`{ id, lastSeenAt }`, reused by `heartbeat` and
 `revokeAllForUser` so neither re-queries by token). All reads, no `ctx.auth`.
@@ -134,6 +249,15 @@ The roles tuple
 is typed `readonly [UserRole, ...UserRole[]]` so `.requires([])` is a compile
 error, and forgetting `.requires(...)` is too (`authMutation` has only
 `.requires`, not `.input`).
+
+⚠️ **The status check is an ALLOW-list — `if (status !== "active")` plus the
+exhaustive `SESSION_ENDED_MESSAGES` record — and must stay one.** It used to be
+a chain of `=== "revoked"` / `=== "signed_out"` tests, which meant any status
+added later fell straight through and remained a fully valid credential, with no
+TypeScript error anywhere. As written, adding a `SESSION_STATUSES` member fails
+to compile until the message map covers it. `session.revoke`'s "this session
+already ended" message uses the same trick
+(`SESSION_ALREADY_ENDED_MESSAGES`) for the same reason.
 
 `publicQuery`/`publicMutation`/`publicAction`, `privateQuery`/`privateMutation`/
 `privateAction` (`.internal()`), and `publicRoute` (HTTP) round out the set.
@@ -149,9 +273,11 @@ sign-in / sign-up read the IP and User-Agent straight off the context. See
 
 `USER_ROLES`, `UserRole`, and the input schemas (`signInInputSchema`,
 `signUpWithInvitationInputSchema`, `bootstrapAdminInputSchema`,
-`listUsersInputSchema`, `getUserInputSchema`) live in
+`listUsersInputSchema`, `getUserInputSchema`, `changePasswordInputSchema`,
+`resetPasswordInputSchema`) live in
 `packages/backend/convex/shared/tables/user.ts`; session constants
 (`SESSION_TTL_MS`, `SESSION_STATUSES`, `SESSION_STATUS_LABELS`,
+`SESSION_ENDED_MESSAGES`, `SESSION_ALREADY_ENDED_MESSAGES`,
 `HEARTBEAT_INTERVAL_MS`, `LAST_SEEN_THROTTLE_MS`, `sessionTokenSchema`, and the
 `signOut` / list / revoke input schemas) in `shared/tables/session.ts` — which
 is also where the IP/User-Agent trust caveats are written down. All three
