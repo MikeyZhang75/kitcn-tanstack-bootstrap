@@ -102,11 +102,14 @@ export const list = authQuery
 		// One INDEX-BACKED query per listed user rather than a single
 		// `inArray(userId, ...)` over the whole table.
 		//
-		// `inArray` compiles to a left-folded `or`, which is a *filter*, not an
-		// index range — Convex would scan every session row and only then apply
-		// the limit. The session table is append-only (rows are never deleted),
-		// so that scan grows without bound. `eq(userId, ...)` uses the `userId`
-		// index, and the per-user `limit` is then a genuine read cap.
+		// An `inArray` on an *indexed* field compiles to a "multiProbe" index
+		// union — one `withIndex` probe per value. Since kitcn 0.25 each probe
+		// is bounded (`.order(dir).take(offset + limit)`), so the read is no
+		// longer unbounded; but the merged rows are then sliced to a *single*
+		// `limit` across all probes. One batched call would therefore return at
+		// most `limit` rows in total, not `limit` per user. `eq(userId, ...)`
+		// with a per-user `limit` is the only shape that expresses "the newest
+		// N sessions of each user", and there the limit is a genuine read cap.
 		//
 		// `pageSize` is capped at USER_LIST_PAGE_SIZE_MAX (100), so this is at
 		// most 100 small indexed reads for a page.

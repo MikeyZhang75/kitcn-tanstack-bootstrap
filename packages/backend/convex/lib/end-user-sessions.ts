@@ -53,6 +53,15 @@ export async function endUserSessions(
 		// fields in order and consumes an `eq` for each), so `limit` below is a
 		// real read bound rather than a slice applied after a wider scan. Keep the
 		// clause order matching the index's field order.
+		//
+		// ⚠️ Since kitcn 0.25 the `orderBy` pushdown that depends on this is
+		// CONDITIONAL: it reaches Convex's `.order()` only when every field of the
+		// chosen index is consumed by an `eq`. Both are here, so it holds. Drop
+		// either equality, or loosen one into a range (gt/gte/lt/lte), and kitcn
+		// silently falls back to a post-fetch JS sort — `limit` stops being a read
+		// bound and becomes a slice over a `collect()` of every matching row,
+		// which also turns the batch size back into the hard ceiling described
+		// above.
 		where: (fields, { and, eq }) =>
 			and(eq(fields.userId, opts.userId), eq(fields.status, "active")),
 		// `orderBy` is load-bearing, not cosmetic — though for a subtler reason

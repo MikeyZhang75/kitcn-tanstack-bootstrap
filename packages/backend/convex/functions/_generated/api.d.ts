@@ -144,7 +144,7 @@ export declare const api: {
  */
 export declare const internal: {
   generated: {
-    server: {
+    aggregate: {
       aggregateBackfill: FunctionReference<"mutation", "internal", any, any>;
       aggregateBackfillChunk: FunctionReference<
         "mutation",
@@ -158,6 +158,8 @@ export declare const internal: {
         any,
         any
       >;
+    };
+    server: {
       migrationCancel: FunctionReference<"mutation", "internal", any, any>;
       migrationRun: FunctionReference<"mutation", "internal", any, any>;
       migrationRunChunk: FunctionReference<"mutation", "internal", any, any>;

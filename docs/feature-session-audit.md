@@ -126,10 +126,17 @@ The heartbeat is fire-and-forget and swallows errors: a ping that fails because
 the session was just revoked must not throw into the layout.
 
 ⚠️ The hook holds the cRPC client in a **ref** and keys its effect on the token
-alone. `useCRPCClient()` returns a fresh `Proxy` on every render whenever the
-context was built with `convexSiteUrl` (it is), so putting it in the dependency
-array would rebuild the timer — and fire a heartbeat round-trip — on every
-render of the layout.
+alone, so the client can never enter the dependency array — an unstable identity
+there would rebuild the timer, and fire a heartbeat round-trip, on every render
+of the layout.
+
+Since kitcn 0.25 the merged client is memoized inside `CRPCProvider`, so
+`useCRPCClient()` is referentially **stable** today. That's the argument _for_
+keeping the ref, not against it: the contract flipped silently in 0.25.1 (before
+it, the hook returned a fresh `Proxy` on every render whenever the context was
+built with `convexSiteUrl`, which it is here). Don't "simplify" this into a
+dependency array — it would stake the timer on an identity guarantee kitcn has
+already changed once.
 
 #### `ctx.session` — injected by the auth middleware
 
@@ -223,6 +230,17 @@ being a constant, revisit this. The `users.list` summary below relies on
 > Fixing it needed the `status` column hardened to `.notNull()` first, since an
 > indexed equality on `"active"` would otherwise have skipped pre-backfill rows.
 
+⚠️ **Since kitcn 0.25, that pushdown is conditional.** `orderBy` reaches
+Convex's `.order()` only when **every field of the chosen index is consumed by an
+`eq`** — which is exactly what the two equalities above do to
+`("userId", "status")`. Widening an index is therefore safe _as long as the added
+field is also pinned_; what breaks it is leaving one field unpinned, or loosening
+one into a range (`gt`/`gte`/`lt`/`lte`). Then kitcn falls back to a post-fetch JS
+sort, `limit` degrades from a read bound into a slice over a `collect()` of every
+matching row — and the batch size quietly becomes the hard ceiling the history
+note above describes. Every query in this feature is verified safe today; the
+trap is in _editing_ them.
+
 `listByUser` also returns `isCurrent` per row (derived from `ctx.session.id`,
 never from the token) so the UI can tag the admin's own session 本机 and warn
 in the confirm dialog before they kick themselves.
@@ -256,12 +274,14 @@ Two deliberate non-obvious choices:
 
 - **`users.list` runs one INDEX-BACKED query per listed user** for its session
   summary, not a single `inArray(userId, …)` batch. That distinction matters:
-  kitcn compiles `inArray` on an indexed field to a "multiProbe" strategy that
-  `collect()`s **every** matching row per id and only then slices to the
-  requested `limit` — so the `limit` is a post-fetch slice, not a read bound,
-  and against an append-only table the read grows without bound (and truncates
-  in probe order, starving later users of a summary entirely). `eq(userId, …)`
-  with a `limit` compiles to `withIndex(...).take(n)`, which is a genuine cap:
+  kitcn compiles `inArray` on an indexed field to a "multiProbe" index union —
+  one `withIndex` probe per value. Since 0.25.1 each probe is bounded
+  (`.order(dir).take(offset + limit)`), so the read is no longer unbounded, but
+  the merged rows are still sliced to a **single** `limit` across all probes.
+  One batched call would therefore return at most `limit` rows in total, not
+  `limit` per user — it simply cannot express "the newest N sessions of _each_
+  user". `eq(userId, …)` with a per-user `limit` compiles to
+  `withIndex(...).take(n)`, which is a genuine cap:
   `SESSION_SUMMARY_SCAN_PER_USER` (200) newest rows per user, `pageSize` capped
   at 100. Using `count()` instead would need an `aggregateIndex` per
   `(userId, status)` and still couldn't express "active AND not expired", which

@@ -352,6 +352,12 @@ Drop the flag entirely to target dev.
   repo.
 - Deploys read the working tree, not HEAD. Commit before `bunx kitcn deploy`
   if you want git and prod to match.
+- **After bumping `kitcn`, run `bun run codegen` before any migrate/deploy.**
+  Since 0.25.x the generated `createOrm()` must register
+  `migrationCapability()` — without it `migrationRun` / `migrationRunChunk` /
+  `migrationStatus` / `migrationCancel` fail at call time, and nothing in
+  `bun run typecheck` catches the omission. Grep
+  `convex/functions/generated/server.ts` for `migrationCapability` to confirm.
 
 For authoritative command reference, see the official kitcn migration docs:
 <https://kitcn.dev/docs/orm/migrations>

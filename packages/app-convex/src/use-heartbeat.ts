@@ -27,11 +27,17 @@ export function useSessionHeartbeat(): void {
 	const crpcClient = useCRPCClient();
 	const sessionToken = useSessionToken();
 
-	// `useCRPCClient()` returns a fresh Proxy on every render whenever the cRPC
-	// context was built with `convexSiteUrl` (it is here), so it must NOT go in
-	// the dependency array — the effect would tear down and rebuild the timer on
-	// every render of the layout, firing a heartbeat round-trip each time. Hold
-	// it in a ref and key the effect on the token alone.
+	// Hold the client in a ref and key the effect on the token alone, so the
+	// client can never go in the dependency array — an unstable identity there
+	// would tear down and rebuild the timer on every render of the layout,
+	// firing a heartbeat round-trip each time.
+	//
+	// kitcn >= 0.25 memoizes the merged client inside `CRPCProvider`, so
+	// `useCRPCClient()` is referentially stable today. That is exactly why the
+	// ref stays: the contract silently flipped in 0.25.1 (before it, the hook
+	// returned a fresh Proxy on every render whenever the cRPC context was
+	// built with `convexSiteUrl`, which it is here), so this must not depend on
+	// an identity guarantee kitcn has already changed once.
 	const clientRef = useRef(crpcClient);
 	clientRef.current = crpcClient;
 

@@ -7,6 +7,7 @@ import {
   type GenericOrmCtx,
   type OrmFunctions,
 } from 'kitcn/orm';
+import { migrationCapability } from 'kitcn/orm/migrations';
 import {
   createGeneratedFunctionReference,
   initCRPC as baseInitCRPC,
@@ -26,7 +27,7 @@ import { migrations } from '../migrations/manifest';
 const ormFunctions: OrmFunctions = {
   scheduledMutationBatch: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledMutationBatch"),
   scheduledDelete: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledDelete"),
-  aggregateBackfillChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:aggregateBackfillChunk"),
+  aggregateBackfillChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/aggregate:aggregateBackfillChunk"),
   migrationRunChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:migrationRunChunk"),
   resetChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:resetChunk"),
 };
@@ -39,7 +40,7 @@ registerProcedureNameLookup(
   "session.ts": [{ column: 2, line: 197, name: "session:countByUser" }, { column: 2, line: 95, name: "session:heartbeat" }, { column: 2, line: 131, name: "session:listByUser" }, { column: 49, line: 111, name: "session:me" }, { column: 2, line: 222, name: "session:revoke" }, { column: 2, line: 270, name: "session:revokeAllForUser" }, { column: 2, line: 31, name: "session:signIn" }, { column: 2, line: 70, name: "session:signOut" }],
   "settings.ts": [{ column: 51, line: 15, name: "settings:getRegistrationSettings" }, { column: 2, line: 33, name: "settings:setRequireInvitationCode" }],
   "signup.ts": [{ column: 2, line: 24, name: "signup:signUpWithInvitation" }],
-  "users.ts": [{ column: 2, line: 36, name: "users:bootstrapAdmin" }, { column: 51, line: 161, name: "users:count" }, { column: 2, line: 171, name: "users:get" }, { column: 2, line: 83, name: "users:list" }, { column: 2, line: 230, name: "users:resetPassword" }],
+  "users.ts": [{ column: 2, line: 36, name: "users:bootstrapAdmin" }, { column: 51, line: 164, name: "users:count" }, { column: 2, line: 174, name: "users:get" }, { column: 2, line: 83, name: "users:list" }, { column: 2, line: 233, name: "users:resetPassword" }],
 },
   "convex/functions"
 );
@@ -47,6 +48,7 @@ registerProcedureNameLookup(
 export const orm = createOrm({
   schema: ormSchema,
   ormFunctions,
+  capabilities: [migrationCapability()],
   migrations,
   internalMutation,
 });
@@ -71,9 +73,6 @@ export { httpAction, internalMutation };
 export const {
   scheduledMutationBatch,
   scheduledDelete,
-  aggregateBackfill,
-  aggregateBackfillChunk,
-  aggregateBackfillStatus,
   migrationRun,
   migrationRunChunk,
   migrationStatus,

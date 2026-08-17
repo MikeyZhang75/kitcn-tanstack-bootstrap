@@ -208,6 +208,7 @@ test plan if the surface area is non-trivial.
 | 2026-08-17 | `lucide-react`             | 1.27.0   | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `sonner`                   | 2.0.7    | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `@tanstack/react-table`    | 8.21.3   | —        | web, dashboard (removed)                | —         |
+| 2026-08-17 | `kitcn`                    | 0.17.4   | 0.25.1   | all four workspaces                     | `8f9beee` |
 
 Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
 (`abcd641`) are a routine coupled bump — notes for those are in the section
@@ -289,9 +290,10 @@ Smaller same-range refreshes in the same commit: `@tanstack/react-devtools`
 
 ### Notes on the 2026-08-17 kitcn/convex bump
 
-kitcn 0.16.0 raised the `convex` peer floor from `>=1.38` to `>=1.42` and it
-stays open-ended at `>=1.42` in 0.17.4, so convex went to `latest` (1.44.0).
-The two still move together — keep bumping them in one commit.
+kitcn 0.16.0 raised the `convex` peer floor from `>=1.38` to `>=1.42`, and in
+0.17.4 it was still open-ended at `>=1.42`, so convex went to `latest` (1.44.0).
+The two still move together — keep bumping them in one commit. (0.25.1 later
+added an upper bound; see the 2026-08-17 kitcn 0.25.1 notes below.)
 
 kitcn 0.17.0 carried five breaking changes. Four don't touch this repo (no
 RLS policies, no `Ratelimit`, no `.withIndex()`, no cursor pagination —
@@ -335,6 +337,94 @@ stopped emitting the unused `api` type import into
 from the Cloudflare workers pool. Verified pre-existing by stashing the bump
 and re-installing — it fails identically at 0.15.17/1.42.3, and there are no
 test files in either app. Unrelated to this bump; CI doesn't run it.
+
+### Notes on the 2026-08-17 kitcn 0.25.1 bump (0.17.4 → 0.25.1, 11 releases)
+
+Audited by diffing the published `dist/` of both versions chunk-by-chunk
+(the changelog was deliberately not trusted). Chunk filenames are content-
+hashed and differ between versions, so `diff -r` over `dist/` is noise —
+match a chunk by its re-export chain or a distinctive identifier, normalize
+the 8-char hashes, then diff those two files. Snapshots used:
+`npm pack kitcn@<v>` into `/tmp`, never the live `node_modules`.
+
+**`bun run codegen` is mandatory here, and `bun run typecheck` cannot tell
+you that you skipped it.** `createOrm()` gained a `capabilities` array, and
+the aggregate + migration runtimes moved out of the `kitcn/orm` barrel into
+new subpath exports (`kitcn/orm/aggregate-index`, `kitcn/orm/migrations`).
+The migration runtime is no longer in `kitcn/orm`'s module graph at all, so a
+stale 0.17.4-era `generated/server.ts` still compiles — `capabilities?` is
+optional and `OrmFunctions` is field-for-field unchanged — but
+`migrationRun` / `migrationRunChunk` / `migrationStatus` / `migrationCancel`
+then hard-fail **at call time**. Verification is a grep, not a gate:
+`generated/server.ts` must contain `migrationCapability`. Never
+`bunx kitcn deploy` 0.25.1 against un-regenerated bindings.
+
+**Codegen adds two new files — `git commit -am` would ship a broken tree.**
+The aggregate procedures split into their own Convex module, so regenerating
+produces: NEW `convex/functions/generated/aggregate.ts` and
+`generated/aggregate.runtime.ts` (both **untracked**, both must be
+`git add`-ed); `generated/server.ts` loses its three `aggregateBackfill*`
+exports, gains `capabilities: [migrationCapability()]`, and repoints
+`ormFunctions.aggregateBackfillChunk` to `generated/aggregate:…`;
+`generated/server.runtime.ts` drops the same three from its registry;
+`_generated/api.d.ts` gains an `internal.generated.aggregate` block; and
+`_generated/dataModel.d.ts` gains a `by_table_status` index on the
+auto-injected `aggregate_state` table. `shared/api.ts` is unchanged.
+
+**convex is now version-capped.** The peer narrowed from `>=1.42` to
+`>=1.42 <1.45.0`. 1.44.0 (what all four workspaces pin, and still npm
+`latest`) satisfies it with zero slack above. Do **not** bump convex to
+1.45.x while kitcn is 0.25.1. Two soft mechanisms guard this and neither
+fails a build: bun's peer warning, and — new in this delta — kitcn's own CLI,
+which computes an upper bound and warns on `codegen` / `deploy` / `dev` /
+`add` / `env` / `init` / `verify`. 0.17.4 checked only a floor. All four pins
+are exact, so no install drifts past the cap on its own.
+
+**`kitcn aggregate backfill|rebuild` became a silent no-op for this repo** —
+the flow now short-circuits locally unless `schema.ts` declares an
+`aggregateIndex(...)`/`rankIndex(...)`, which this repo doesn't. `prune` is
+ungated. `kitcn migrate` gained a matching guard on `migrations/manifest.ts`
+existing (it does). See [kitcn-cli-guide.md](kitcn-cli-guide.md).
+
+**Verified unchanged** (this is the useful half of an 8-minor audit — each
+was diffed in source, not assumed): the whole cRPC builder core
+(`initCRPC.create()`, `.internal()`, stacked `.input()` partitioning, the
+`.use()`/`next({ ctx })` middleware contract, handler signatures); every ORM
+read/write compilation the repo exercises; `ctx.meta.getRequestMetadata()`;
+`CRPCError`'s wire shape; the CLI's default-target asymmetry and full flag
+surface; and — most load-bearing for this repo — the React decorator
+method-name set (`queryOptions` / `staticQueryOptions` /
+`infiniteQueryOptions` / `queryKey` / `queryFilter` / `infiniteQueryKey` /
+`mutationOptions`) plus the `CRPCClient` type mapping and the
+`[key: string]: unknown` index signature on api leaves. A new args-carrying
+decorator would have silently bypassed `authed-crpc-proxy.ts`'s token
+injection; there isn't one. **No hand-written code change was required.**
+
+Three behavioral changes were real but harmless — they only falsified
+comments, all corrected in the same commit:
+
+- `useCRPCClient()` now returns a referentially **stable** proxy (the http
+  merge moved into `CRPCProvider` and is memoized). The ref in
+  `use-heartbeat.ts` stays — the point is that this contract has now flipped
+  once.
+- An indexed-field `inArray` ("multiProbe") now bounds each probe with
+  `.take(offset + limit)` instead of `collect()`ing everything. The merged
+  result is still sliced to one `limit` across all probes, so `users.list`'s
+  per-user `eq()` shape is still the only thing that expresses "newest N per
+  user". `IN_ARRAY_BATCH_SIZE = 30` in `lib/orm-helpers.ts` is **untouched
+  and still correct** — the repo's only real `inArray` is on `id`, which has
+  no leading index, so it still compiles to a left-folded `q.or` chain.
+- `orderBy` pushdown into Convex's `.order()` is now conditional on the
+  selected index being **fully pinned by `eq`** filters. Every current query
+  is safe; the trap is in editing them (add a range filter, or widen a
+  single-field index into a compound one, and `limit` silently degrades from
+  a read bound to a post-fetch slice). Written down in
+  [feature-session-audit.md](feature-session-audit.md).
+
+Also: kitcn dropped `svix` from its dependencies (webhooks — unused here),
+and `kitcn/orm` dropped 7 internal type exports, none of which the repo
+imports. Gates after the bump: `check:fix` clean, `typecheck` 5/5,
+`build` 2/2 (both apps prerender `/` → 200).
 
 ## Pending (audit 2026-07-26)
 
