@@ -158,6 +158,15 @@ function AuthPage() {
 						/>
 					</Form.Item>
 
+					<Form.Item label="密码" name="password" rules={[passwordRule]}>
+						<Input.Password
+							autoComplete={isSignUp ? "new-password" : "current-password"}
+							placeholder={
+								isSignUp ? `至少 ${PASSWORD_MIN_LENGTH} 位` : "请输入密码"
+							}
+						/>
+					</Form.Item>
+
 					{isSignUp && requireInvitationCode ? (
 						<Form.Item
 							label="邀请码"
@@ -171,15 +180,6 @@ function AuthPage() {
 							/>
 						</Form.Item>
 					) : null}
-
-					<Form.Item label="密码" name="password" rules={[passwordRule]}>
-						<Input.Password
-							autoComplete={isSignUp ? "new-password" : "current-password"}
-							placeholder={
-								isSignUp ? `至少 ${PASSWORD_MIN_LENGTH} 位` : "请输入密码"
-							}
-						/>
-					</Form.Item>
 
 					<Form.Item style={{ marginBottom: 8 }}>
 						<Button block htmlType="submit" loading={isPending} type="primary">

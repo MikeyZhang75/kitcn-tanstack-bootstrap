@@ -1,8 +1,7 @@
 "use client";
 
-import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
-import { useSessionToken } from "@repo/app-convex/use-session";
+import { useAuthedCRPC } from "@repo/app-convex/use-authed-crpc";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { App, Flex, Typography } from "antd";
@@ -27,11 +26,10 @@ export const Route = createFileRoute("/_authenticated/invitations/")({
 const DEFAULT_PAGE_SIZE = 20;
 
 function InvitationsPage() {
-	const crpc = useCRPC();
+	// Every invitations procedure is admin-only, so this page talks to the
+	// authed proxy exclusively — it injects `sessionToken` for us.
+	const crpc = useAuthedCRPC();
 	const { message } = App.useApp();
-	// All invitations procedures are admin-only; thread the session token from
-	// localStorage into every call (guaranteed present inside _authenticated).
-	const sessionToken = useSessionToken() ?? "";
 	const [pagination, dispatchPagination] = useReducer(
 		invitationsPaginationReducer,
 		DEFAULT_PAGE_SIZE,
@@ -45,17 +43,11 @@ function InvitationsPage() {
 	// The server resolves each page in one offset-based index scan, so a jump
 	// from page 0 to page N is a single WS round-trip.
 	const pageQuery = useQuery({
-		...crpc.invitations.list.queryOptions({
-			page: pageIndex,
-			pageSize,
-			sessionToken,
-		}),
+		...crpc.invitations.list.queryOptions({ page: pageIndex, pageSize }),
 		placeholderData: keepPreviousData,
 	});
 
-	const countQuery = useQuery(
-		crpc.invitations.count.queryOptions({ sessionToken }),
-	);
+	const countQuery = useQuery(crpc.invitations.count.queryOptions());
 	const total = countQuery.data?.data?.total;
 
 	const invitations: InvitationRow[] = useMemo(
@@ -116,7 +108,7 @@ function InvitationsPage() {
 	const handleRevokeConfirm = () => {
 		if (!revoking) return;
 		revokeMutation.mutate(
-			{ id: revoking.id, sessionToken },
+			{ id: revoking.id },
 			{
 				onSuccess: () => {
 					message.success("邀请码已撤销");

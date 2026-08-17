@@ -1,7 +1,6 @@
 "use client";
 
-import { useCRPC } from "@repo/app-convex/crpc";
-import { useSessionToken } from "@repo/app-convex/use-session";
+import { useAuthedCRPC } from "@repo/app-convex/use-authed-crpc";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Flex, Typography } from "antd";
@@ -18,12 +17,11 @@ export const Route = createFileRoute("/_authenticated/users/")({
 const DEFAULT_PAGE_SIZE = 20;
 
 function UsersPage() {
-	const crpc = useCRPC();
-	// All users procedures are admin-only; thread the session token from
-	// localStorage (guaranteed present inside _authenticated).
-	const sessionToken = useSessionToken() ?? "";
+	// Every users procedure is admin-only, so this page talks to the authed
+	// proxy exclusively — it injects `sessionToken` for us.
+	const crpc = useAuthedCRPC();
 
-	const countQuery = useQuery(crpc.users.count.queryOptions({ sessionToken }));
+	const countQuery = useQuery(crpc.users.count.queryOptions());
 	const total = countQuery.data?.data?.total;
 
 	const { pageIndex, pageSize, paginationProps } = useOffsetPagination(
@@ -35,11 +33,7 @@ function UsersPage() {
 	// fetching, so the table shows prior rows under antd's loading mask instead
 	// of flashing an empty state.
 	const pageQuery = useQuery({
-		...crpc.users.list.queryOptions({
-			page: pageIndex,
-			pageSize,
-			sessionToken,
-		}),
+		...crpc.users.list.queryOptions({ page: pageIndex, pageSize }),
 		placeholderData: keepPreviousData,
 	});
 

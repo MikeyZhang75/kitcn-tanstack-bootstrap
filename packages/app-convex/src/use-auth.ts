@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useCRPC, useCRPCClient } from "./crpc";
 import { clearSessionToken, setSessionToken } from "./session-store";
-import { useSessionToken } from "./use-session";
+import { useSessionToken } from "./use-session-token";
 
 // Auth action hooks shared by both apps. They wrap the cRPC mutations and own
 // the localStorage token side effects (store on sign-in/up, clear on sign-out)

@@ -25,7 +25,7 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { code?: string; sessionToken: string },
+      { count: number; sessionToken: string },
       any
     >;
     list: FunctionReference<

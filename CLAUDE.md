@@ -12,7 +12,7 @@ Each doc below is imported into context. Read the relevant one(s) based on the t
 
 @docs/backend-architecture.md
 
-<!-- Auth flow: custom session-token user system (no Better Auth, no JWT) — scrypt credentials, opaque session token in localStorage threaded into authed procedure inputs, client-side `_authenticated` gate (ssr:false) via `useSession`. -->
+<!-- Auth flow: custom session-token user system (no Better Auth, no JWT) — scrypt credentials, opaque session token in localStorage threaded into authed procedure inputs by the `useAuthedCRPC()` proxy (never by hand at call sites), client-side `_authenticated` gate (ssr:false) via `useSession`. -->
 
 @docs/auth.md
 

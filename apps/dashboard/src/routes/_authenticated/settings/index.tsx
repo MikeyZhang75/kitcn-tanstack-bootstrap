@@ -2,7 +2,7 @@
 
 import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
-import { useSessionToken } from "@repo/app-convex/use-session";
+import { useAuthedCRPC } from "@repo/app-convex/use-authed-crpc";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { App, Card, Flex, Skeleton, Switch, Typography } from "antd";
@@ -12,19 +12,20 @@ export const Route = createFileRoute("/_authenticated/settings/")({
 });
 
 function SettingsPage() {
+	// The read is public (no token); the toggle is admin-only. Public procedures
+	// must go through the plain proxy — Convex validates args strictly, so an
+	// injected `sessionToken` would be rejected outright.
 	const crpc = useCRPC();
+	const authed = useAuthedCRPC();
 	const { message } = App.useApp();
-	const sessionToken = useSessionToken() ?? "";
 
-	// The read is public (no token); the toggle is admin-only and threads the
-	// session token (guaranteed present inside _authenticated).
 	const settingsQuery = useQuery(
 		crpc.settings.getRegistrationSettings.queryOptions({}),
 	);
 	const requireInvitationCode = settingsQuery.data?.data?.requireInvitationCode;
 
 	const updateMutation = useMutation(
-		crpc.settings.setRequireInvitationCode.mutationOptions(),
+		authed.settings.setRequireInvitationCode.mutationOptions(),
 	);
 
 	// The switch is driven by the live query (single source of truth): the
@@ -32,7 +33,7 @@ function SettingsPage() {
 	// value back, so we only disable the control while the write is in flight.
 	const handleToggle = (checked: boolean) => {
 		updateMutation.mutate(
-			{ requireInvitationCode: checked, sessionToken },
+			{ requireInvitationCode: checked },
 			{
 				onSuccess: () => message.success("已保存"),
 				onError: (err) => message.error(extractErrorMessage(err) ?? "保存失败"),

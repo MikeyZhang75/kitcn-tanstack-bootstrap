@@ -4,7 +4,7 @@ import { HEARTBEAT_INTERVAL_MS } from "@repo/backend/shared/tables/session";
 import { useEffect, useRef } from "react";
 
 import { useCRPCClient } from "./crpc";
-import { useSessionToken } from "./use-session";
+import { useSessionToken } from "./use-session-token";
 
 // Liveness ping for `session.lastSeenAt`.
 //

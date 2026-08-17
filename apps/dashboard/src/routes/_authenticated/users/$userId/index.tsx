@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { useCRPC } from "@repo/app-convex/crpc";
 import { extractErrorMessage } from "@repo/app-convex/errors";
+import { useAuthedCRPC } from "@repo/app-convex/use-authed-crpc";
 import { useSession } from "@repo/app-convex/use-session";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -33,20 +33,19 @@ const DEFAULT_PAGE_SIZE = 20;
 
 function UserDetailPage() {
 	const { userId } = Route.useParams();
-	const crpc = useCRPC();
+	// Every procedure on this page is admin-only, so it talks to the authed
+	// proxy exclusively — it injects `sessionToken` for us.
+	const crpc = useAuthedCRPC();
 	const { message } = App.useApp();
 	// The signed-in admin — used to label the "this is you" case in the
 	// revoke-all dialog. The exclusion itself is enforced server-side.
-	const { sessionToken: rawToken, user: currentUser } = useSession();
-	const sessionToken = rawToken ?? "";
+	const { user: currentUser } = useSession();
 
-	const userQuery = useQuery(
-		crpc.users.get.queryOptions({ id: userId, sessionToken }),
-	);
+	const userQuery = useQuery(crpc.users.get.queryOptions({ id: userId }));
 	const user = userQuery.data?.data?.user;
 
 	const countQuery = useQuery(
-		crpc.session.countByUser.queryOptions({ userId, sessionToken }),
+		crpc.session.countByUser.queryOptions({ userId }),
 	);
 	const total = countQuery.data?.data?.total;
 	const capped = countQuery.data?.data?.capped;
@@ -62,7 +61,6 @@ function UserDetailPage() {
 			userId,
 			page: pageIndex,
 			pageSize,
-			sessionToken,
 		}),
 		placeholderData: keepPreviousData,
 	});
@@ -100,7 +98,7 @@ function UserDetailPage() {
 	const handleRevokeConfirm = () => {
 		if (!revoking) return;
 		revokeMutation.mutate(
-			{ id: revoking.id, sessionToken },
+			{ id: revoking.id },
 			{
 				onSuccess: () => {
 					message.success("会话已终止");
@@ -115,7 +113,7 @@ function UserDetailPage() {
 
 	const handleRevokeAllConfirm = () => {
 		revokeAllMutation.mutate(
-			{ userId, sessionToken },
+			{ userId },
 			{
 				onSuccess: (result) => {
 					const revoked = result.data.revoked;

@@ -3,14 +3,23 @@ import { z } from "zod";
 import type { invitationsTable } from "../../functions/schema";
 
 // ─── Invitation code constraints ───────────────────────────────────────────
-// Shared between the signup validator (end-user consumes an invitation) and
-// the admin dashboard (admin mints a new one). The pattern intentionally
-// allows `_` and `-` so human-readable codes like `launch-001` stay valid
-// alongside auto-generated alphanumeric strings.
+// The shape a code must have to be accepted at signup (end-user types it in)
+// and to be stored on a row. Codes are *never* authored by a human anymore —
+// `invitations.create` always generates them — but the validator stays because
+// signup still parses whatever the visitor typed. The pattern remains wider
+// than the generator's alphabet (`_` and `-` are allowed) so historical
+// hand-minted codes like `launch-001` keep validating.
 
 export const INVITATION_CODE_MIN_LENGTH = 4;
 export const INVITATION_CODE_MAX_LENGTH = 64;
 export const INVITATION_CODE_PATTERN = "[A-Za-z0-9_-]+";
+
+// ─── Generated code shape ──────────────────────────────────────────────────
+// Length lives here rather than next to the generator so the dashboard copy
+// ("自动生成 12 位…") and the backend stay in sync. The alphabet itself is a
+// backend-only concern and stays in `functions/invitations.ts`.
+
+export const GENERATED_INVITATION_CODE_LENGTH = 12;
 
 // ─── Status enum ───────────────────────────────────────────────────────────
 // `active` — 未使用，可被 signup 消耗或 admin 撤销。
@@ -72,10 +81,31 @@ export const listInputSchema = z.object({
 	pageSize: z.number().int().min(1).max(INVITATION_LIST_PAGE_SIZE_MAX),
 });
 
+// ─── Batch creation constraints ────────────────────────────────────────────
+// Admins mint codes by count only — the code value itself is always generated
+// server-side, so there is no `code` input. The upper bound keeps a single
+// create call inside one Convex mutation's budget: each code costs one
+// uniqueness probe plus one insert, and 100 of those is comfortably under the
+// per-transaction read/write limits.
+
+export const INVITATION_CREATE_COUNT_MIN = 1;
+export const INVITATION_CREATE_COUNT_MAX = 100;
+export const DEFAULT_INVITATION_CREATE_COUNT = 1;
+
+export const invitationCreateCountSchema = z
+	.number("请输入创建数量")
+	.int("创建数量必须是整数")
+	.min(
+		INVITATION_CREATE_COUNT_MIN,
+		`创建数量至少 ${INVITATION_CREATE_COUNT_MIN} 个`,
+	)
+	.max(
+		INVITATION_CREATE_COUNT_MAX,
+		`创建数量最多 ${INVITATION_CREATE_COUNT_MAX} 个`,
+	);
+
 export const createInvitationInputSchema = z.object({
-	// When omitted, the backend auto-generates a random code. Admins can supply
-	// a custom value (e.g. campaign codes) by passing a non-empty string here.
-	code: invitationCodeInputSchema.optional(),
+	count: invitationCreateCountSchema,
 });
 
 export const revokeInvitationInputSchema = z.object({

@@ -209,6 +209,11 @@ Two deliberate non-obvious choices:
 
 #### Frontend — `apps/dashboard/src/routes/_authenticated/users/`
 
+Every procedure behind these pages is admin-only, so both routes talk to
+`useAuthedCRPC()` exclusively — `sessionToken` is injected at the boundary and
+erased from the argument types, so it never appears at a call site (see
+[auth](auth.md)).
+
 ```
 index.tsx                                用户列表
 -components/users-table.tsx
