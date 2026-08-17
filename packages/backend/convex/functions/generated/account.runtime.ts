@@ -14,11 +14,7 @@ import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
-  "bootstrapAdmin": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("../users").bootstrapAdmin>("users:bootstrapAdmin"), () => (require("../users") as Record<string, unknown>)["bootstrapAdmin"])],
-  "count": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").count>("users:count"), () => (require("../users") as Record<string, unknown>)["count"])],
-  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").get>("users:get"), () => (require("../users") as Record<string, unknown>)["get"])],
-  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").list>("users:list"), () => (require("../users") as Record<string, unknown>)["list"])],
-  "resetPassword": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../users").resetPassword>("users:resetPassword"), () => (require("../users") as Record<string, unknown>)["resetPassword"])],
+  "changePassword": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../account").changePassword>("account:changePassword"), () => (require("../account") as Record<string, unknown>)["changePassword"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;
@@ -61,7 +57,7 @@ type GeneratedProcedureHandler<
 >;
 
 
-export function createUsersCaller<TCtx extends ProcedureCallerContext>(
+export function createAccountCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
   return generatedRuntime.getCallerFactory()(
@@ -69,7 +65,7 @@ export function createUsersCaller<TCtx extends ProcedureCallerContext>(
   ) as GeneratedProcedureCaller<TCtx>;
 }
 
-export function createUsersHandler<TCtx extends ProcedureHandlerContext>(
+export function createAccountHandler<TCtx extends ProcedureHandlerContext>(
   ctx: TCtx
 ): GeneratedProcedureHandler<TCtx> {
   return generatedRuntime.getHandlerFactory()(ctx) as GeneratedProcedureHandler<TCtx>;

@@ -20,6 +20,14 @@ import type { GenericId as Id } from "convex/values";
  * ```
  */
 export declare const api: {
+  account: {
+    changePassword: FunctionReference<
+      "mutation",
+      "public",
+      { currentPassword: string; newPassword: string; sessionToken: string },
+      any
+    >;
+  };
   invitations: {
     count: FunctionReference<"query", "public", { sessionToken: string }, any>;
     create: FunctionReference<
@@ -115,6 +123,12 @@ export declare const api: {
       "query",
       "public",
       { page: number; pageSize: number; sessionToken: string },
+      any
+    >;
+    resetPassword: FunctionReference<
+      "mutation",
+      "public",
+      { newPassword: string; sessionToken: string; userId: string },
       any
     >;
   };

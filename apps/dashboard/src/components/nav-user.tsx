@@ -3,15 +3,18 @@
 import {
 	BellOutlined,
 	CreditCardOutlined,
+	LockOutlined,
 	LogoutOutlined,
 	MoreOutlined,
-	UserOutlined,
 } from "@ant-design/icons";
 import { extractErrorMessage } from "@repo/app-convex/errors";
 import { useSignOut } from "@repo/app-convex/use-auth";
 import { useSession } from "@repo/app-convex/use-session";
 import type { MenuProps } from "antd";
 import { App, Avatar, Button, Dropdown, Flex, Typography } from "antd";
+import { useState } from "react";
+
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
 
 function getInitials(name: string | null | undefined): string {
 	const source = name?.trim() || "";
@@ -36,6 +39,7 @@ export function NavUser({ collapsed }: NavUserProps) {
 	const { message } = App.useApp();
 	const { user, isPending } = useSession();
 	const signOut = useSignOut();
+	const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
 	const displayName = user ? user.name || user.username : null;
 	const triggerStyle: React.CSSProperties = {
@@ -62,7 +66,11 @@ export function NavUser({ collapsed }: NavUserProps) {
 
 	const items: MenuProps["items"] = [
 		{ key: "profile", label: displayName, type: "group" },
-		{ disabled: true, icon: <UserOutlined />, key: "account", label: "账户" },
+		{
+			icon: <LockOutlined />,
+			key: "change-password",
+			label: "修改密码",
+		},
 		{
 			disabled: true,
 			icon: <CreditCardOutlined />,
@@ -84,7 +92,13 @@ export function NavUser({ collapsed }: NavUserProps) {
 		},
 	];
 
+	// 按 key 分发。这里以前是 `if (key !== "signout") return;` 的硬提前返回 ——
+	// 再加菜单项时别退回那个写法，新项会静默失效。
 	const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
+		if (key === "change-password") {
+			setChangePasswordOpen(true);
+			return;
+		}
 		if (key !== "signout") return;
 		signOut.mutate(undefined, {
 			// 整页跳转：让 router 带着已清空的 localStorage 从头重建。
@@ -95,26 +109,35 @@ export function NavUser({ collapsed }: NavUserProps) {
 	};
 
 	return (
-		<Dropdown
-			menu={{ items, onClick: handleMenuClick }}
-			placement={collapsed ? "topLeft" : "topRight"}
-			trigger={["click"]}
-		>
-			<Button block style={triggerStyle} type="text">
-				<Flex align="center" gap={8} style={{ width: "100%" }}>
-					<Avatar shape="square" size={32}>
-						{getInitials(displayName)}
-					</Avatar>
-					{collapsed ? null : (
-						<>
-							<Typography.Text ellipsis style={{ flex: 1, textAlign: "left" }}>
-								{displayName}
-							</Typography.Text>
-							<MoreOutlined />
-						</>
-					)}
-				</Flex>
-			</Button>
-		</Dropdown>
+		<>
+			<Dropdown
+				menu={{ items, onClick: handleMenuClick }}
+				placement={collapsed ? "topLeft" : "topRight"}
+				trigger={["click"]}
+			>
+				<Button block style={triggerStyle} type="text">
+					<Flex align="center" gap={8} style={{ width: "100%" }}>
+						<Avatar shape="square" size={32}>
+							{getInitials(displayName)}
+						</Avatar>
+						{collapsed ? null : (
+							<>
+								<Typography.Text
+									ellipsis
+									style={{ flex: 1, textAlign: "left" }}
+								>
+									{displayName}
+								</Typography.Text>
+								<MoreOutlined />
+							</>
+						)}
+					</Flex>
+				</Button>
+			</Dropdown>
+			<ChangePasswordDialog
+				onOpenChange={setChangePasswordOpen}
+				open={changePasswordOpen}
+			/>
+		</>
 	);
 }

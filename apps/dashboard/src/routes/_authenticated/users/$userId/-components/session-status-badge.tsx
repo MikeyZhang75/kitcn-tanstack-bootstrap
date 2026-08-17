@@ -14,6 +14,7 @@ const STATUS_BADGE: Record<SessionDisplayStatus, BadgeProps["status"]> = {
 	expired: "default",
 	signed_out: "default",
 	revoked: "error",
+	password_changed: "warning",
 };
 
 const STATUS_LABELS: Record<SessionDisplayStatus, string> = {

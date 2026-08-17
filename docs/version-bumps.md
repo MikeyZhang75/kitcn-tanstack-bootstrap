@@ -307,11 +307,24 @@ have:
   them. The auth builders stack `z.object({ sessionToken })` under each
   procedure's own schema; `parseInput` in kitcn's builder partitions keys by
   declaring schema and merges the results, and no key is declared twice, so
-  `sessionToken` still reaches the middleware. Note the merge reads
-  `schema.shape` — an `.input()` argument wrapped in a top-level `.refine()`
-  would have no `.shape`. Every schema in `shared/tables/` is a plain
-  `z.object`, so nothing was affected, but a future object-level refinement
-  needs verifying against that code path.
+  `sessionToken` still reaches the middleware.
+
+  The merge does read `schema.shape`, and an earlier revision of this note
+  concluded from that a top-level `.refine()` on an `.input()` schema would
+  break. **That conclusion was wrong** — it assumed zod 3. In zod 4 (4.4.3 here)
+  `.refine()` / `.superRefine()` / `.check()` return `this`, cloning the same
+  `ZodObject` with the check appended, so `.shape` survives. The real constraint
+  is that the input **root must stay a `z.object`**: `.transform()` returns a
+  `ZodPipe`, and root-level `.optional()` / `.nullable()` / union roots are
+  likewise not objects — those genuinely break, and fail the type constraint
+  first. Also worth knowing: on a stacked schema a refine only ever sees the
+  keys that schema declares, never `sessionToken`.
+
+  It remains repo policy to keep cross-field validation **out** of `.input()`
+  schemas, for a different reason: `parseInput` runs outside the handler's try
+  block and throws `ConvexError({ ZodError })`, which bypasses kitcn's error
+  normalizer and reaches the client as a generic 「出现错误」 toast instead of the
+  `{ code, message, data? }` envelope. See [auth](auth.md) 「密码管理」.
 
 Regenerated output moved for two independent reasons, both benign: convex
 1.44.0 adds a typed `env` export to `_generated/server`, and kitcn 0.17.1
