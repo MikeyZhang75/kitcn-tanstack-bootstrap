@@ -36,10 +36,10 @@ registerProcedureNameLookup(
   {
   "account.ts": [{ column: 2, line: 31, name: "account:changePassword" }],
   "invitations.ts": [{ column: 51, line: 75, name: "invitations:count" }, { column: 2, line: 113, name: "invitations:create" }, { column: 2, line: 23, name: "invitations:list" }, { column: 2, line: 173, name: "invitations:revoke" }],
-  "session.ts": [{ column: 2, line: 199, name: "session:countByUser" }, { column: 2, line: 96, name: "session:heartbeat" }, { column: 2, line: 132, name: "session:listByUser" }, { column: 49, line: 112, name: "session:me" }, { column: 2, line: 224, name: "session:revoke" }, { column: 2, line: 270, name: "session:revokeAllForUser" }, { column: 2, line: 32, name: "session:signIn" }, { column: 2, line: 71, name: "session:signOut" }],
+  "session.ts": [{ column: 2, line: 197, name: "session:countByUser" }, { column: 2, line: 95, name: "session:heartbeat" }, { column: 2, line: 131, name: "session:listByUser" }, { column: 49, line: 111, name: "session:me" }, { column: 2, line: 222, name: "session:revoke" }, { column: 2, line: 270, name: "session:revokeAllForUser" }, { column: 2, line: 31, name: "session:signIn" }, { column: 2, line: 70, name: "session:signOut" }],
   "settings.ts": [{ column: 51, line: 15, name: "settings:getRegistrationSettings" }, { column: 2, line: 33, name: "settings:setRequireInvitationCode" }],
   "signup.ts": [{ column: 2, line: 24, name: "signup:signUpWithInvitation" }],
-  "users.ts": [{ column: 2, line: 37, name: "users:bootstrapAdmin" }, { column: 51, line: 160, name: "users:count" }, { column: 2, line: 170, name: "users:get" }, { column: 2, line: 84, name: "users:list" }, { column: 2, line: 229, name: "users:resetPassword" }],
+  "users.ts": [{ column: 2, line: 36, name: "users:bootstrapAdmin" }, { column: 51, line: 161, name: "users:count" }, { column: 2, line: 171, name: "users:get" }, { column: 2, line: 83, name: "users:list" }, { column: 2, line: 230, name: "users:resetPassword" }],
 },
   "convex/functions"
 );

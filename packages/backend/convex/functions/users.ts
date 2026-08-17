@@ -5,7 +5,6 @@ import { endUserSessions } from "../lib/end-user-sessions";
 import { resolveUsernames } from "../lib/orm-helpers";
 import { hashPassword } from "../lib/password";
 import { error, ok } from "../lib/responses";
-import { DEFAULT_SESSION_STATUS } from "../shared/tables/session";
 import {
 	bootstrapAdminInputSchema,
 	getUserInputSchema,
@@ -126,8 +125,10 @@ export const list = authQuery
 				let activeSessionCount = 0;
 				let lastSeenAt: Date | null = null;
 				for (const session of sessions) {
-					const status = session.status ?? DEFAULT_SESSION_STATUS;
-					if (status === "active" && session.expiresAt.getTime() > now) {
+					if (
+						session.status === "active" &&
+						session.expiresAt.getTime() > now
+					) {
 						activeSessionCount += 1;
 					}
 					// Newest heartbeat across the user's sessions, ended ones included

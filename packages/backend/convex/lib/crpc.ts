@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { MutationCtx, QueryCtx } from "../functions/generated/server";
 import { initCRPC } from "../functions/generated/server";
 import {
-	DEFAULT_SESSION_STATUS,
 	SESSION_ENDED_MESSAGES,
 	sessionTokenSchema,
 } from "../shared/tables/session";
@@ -75,13 +74,8 @@ async function resolveSession(
 	// and remained a fully valid credential — with no TypeScript error anywhere.
 	// As written, adding a `SESSION_STATUSES` member fails to compile until
 	// `SESSION_ENDED_MESSAGES` covers it.
-	//
-	// TODO(migration): the `??` tolerates rows written before `status` existed
-	// (they were active); drop it once `backfill_session_status` has run and the
-	// column is hardened to `.notNull()`.
-	const status = session.status ?? DEFAULT_SESSION_STATUS;
-	if (status !== "active") {
-		throw error("UNAUTHORIZED", SESSION_ENDED_MESSAGES[status]);
+	if (session.status !== "active") {
+		throw error("UNAUTHORIZED", SESSION_ENDED_MESSAGES[session.status]);
 	}
 	if (session.expiresAt.getTime() <= Date.now()) {
 		throw error("UNAUTHORIZED", "会话已过期，请重新登录");

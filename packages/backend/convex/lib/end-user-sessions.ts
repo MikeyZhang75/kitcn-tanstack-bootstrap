@@ -4,7 +4,6 @@ import type { Id } from "../functions/_generated/dataModel";
 import type { MutationCtx } from "../functions/generated/server";
 import { sessionTable } from "../functions/schema";
 import {
-	DEFAULT_SESSION_STATUS,
 	type EndedSessionStatus,
 	SESSION_REVOKE_BATCH_MAX,
 } from "../shared/tables/session";
@@ -16,23 +15,19 @@ import {
  * lives here rather than being copied three times and drifting.
  *
  * Returns how many sessions were actually ended. Callers report that number
- * rather than implying the account is fully drained.
+ * rather than implying the account is fully drained in one call.
  *
- * ⚠️ {@link SESSION_REVOKE_BATCH_MAX} is a HARD CEILING, not a batch size —
- * calling again does NOT reach further. The read is
- * `withIndex("userId").order("desc").take(N)` with no `status` filter, so a
- * second call re-reads the same N newest rows (now terminal) and ends zero. An
- * account holding more than N sessions newer than a given active one can never
- * have that one terminated, by this or any other path (`revokeAllForUser` shares
- * this helper). Reaching that state takes N+1 deliberate `session.signIn` calls.
+ * {@link SESSION_REVOKE_BATCH_MAX} is a genuine BATCH SIZE: the window is "the N
+ * newest rows whose status is still `active`", so everything this call ends
+ * leaves the window, and calling again picks up the next N. An account with more
+ * live sessions than N drains over repeated calls.
  *
- * The fix is a compound `("userId", "status")` index plus an
- * `eq(fields.status, "active")` clause, which turns the window into "the N
- * newest *terminable* rows" and genuinely drains. It is blocked until
- * `session.status` is hardened to `.notNull()`: the column is still nullable,
- * null means active (hence the `??` below), and an indexed equality on
- * `"active"` would silently skip those rows. See docs/feature-session-audit.md
- * 「Known limitations」.
+ * That only holds because of the `("userId", "status")` compound index — an
+ * earlier version filtered `userId` alone and sorted the status out in memory,
+ * which made N a hard ceiling: the second call re-read the same N now-terminal
+ * rows and ended zero, leaving any older live session permanently unreachable by
+ * every path that shares this helper. Someone holding the password could reach
+ * that state deliberately with N+1 `session.signIn` calls.
  *
  * @param opts.status           terminal status to write (`revoked`,
  *                              `password_changed`, …).
@@ -54,28 +49,34 @@ export async function endUserSessions(
 	},
 ): Promise<number> {
 	const sessions = await ctx.orm.query.session.findMany({
-		where: (fields, { eq }) => eq(fields.userId, opts.userId),
-		// `orderBy` is load-bearing, not cosmetic: the default order is
-		// `_creationTime` ASCENDING, so a bare `limit` would take the user's
-		// OLDEST rows. Since rows are never deleted, a long-lived account
-		// accumulates ended sessions and the live ones — always the newest —
-		// would fall outside the window, making this silently end nothing while
-		// reporting success.
+		// Both equalities are pushed into the index range (kitcn walks the index's
+		// fields in order and consumes an `eq` for each), so `limit` below is a
+		// real read bound rather than a slice applied after a wider scan. Keep the
+		// clause order matching the index's field order.
+		where: (fields, { and, eq }) =>
+			and(eq(fields.userId, opts.userId), eq(fields.status, "active")),
+		// `orderBy` is load-bearing, not cosmetic — though for a subtler reason
+		// than it looks. The default order is `_creationTime` ASCENDING, so a bare
+		// `limit` would take this user's OLDEST still-`active` rows. Those are
+		// exactly the expired ones: `expiresAt` is `createdAt + SESSION_TTL_MS`
+		// with a constant TTL, so "expired" is equivalent to "older", and expiry
+		// is never materialised into `status`. The filter below then drops every
+		// one of them and this would end nothing while reporting success.
+		// Descending puts every live row ahead of every expired one.
+		//
+		// ⚠️ That equivalence is what a per-session TTL would break. If
+		// `SESSION_TTL_MS` ever stops being a constant, this needs revisiting.
 		orderBy: { createdAt: "desc" },
-		columns: { id: true, status: true, expiresAt: true },
+		columns: { id: true, expiresAt: true },
 		limit: SESSION_REVOKE_BATCH_MAX,
 	});
 
 	const now = Date.now();
 	const targets = sessions.filter(
 		(session) =>
-			// TODO(migration): the `??` tolerates rows written before `status`
-			// existed; drop it once the column is hardened to `.notNull()`.
-			(session.status ?? DEFAULT_SESSION_STATUS) === "active" &&
 			// Skip already-lapsed rows: they're dead, and stamping `revokedBy` on
 			// them would claim someone ended what expired on its own.
-			session.expiresAt.getTime() > now &&
-			session.id !== opts.exceptSessionId,
+			session.expiresAt.getTime() > now && session.id !== opts.exceptSessionId,
 	);
 
 	const endedAt = new Date();

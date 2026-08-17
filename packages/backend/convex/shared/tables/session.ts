@@ -156,10 +156,10 @@ export const revokeUserSessionsInputSchema = z.object({
 // are transactional and bounded, so this caps the write set; every caller
 // returns how many it actually ended.
 //
-// ⚠️ It is a HARD CEILING, not a batch size — repeated calls do NOT reach
-// further, because the read window is the N newest rows regardless of status.
-// See the header of lib/end-user-sessions.ts for the exact failure mode and the
-// (currently blocked) compound-index fix.
+// A genuine batch size, not a ceiling: the read window is "the N newest rows
+// whose status is still `active`" (backed by the `userId_status` index), so
+// everything a call ends leaves the window and the next call picks up the next
+// N. An account with more live sessions than N drains over repeated calls.
 //
 // Bounds all three writers, which share `lib/end-user-sessions.ts`:
 // `session.revokeAllForUser` (踢下线), `account.changePassword` (改密码后踢掉

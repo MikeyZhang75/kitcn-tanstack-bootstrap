@@ -399,7 +399,7 @@ export type DataModel = {
       ipAddress?: null | string;
       lastSeenAt?: null | number;
       revokedBy?: null | Id<"user">;
-      status?: null | "active" | "signed_out" | "revoked" | "password_changed";
+      status: "active" | "signed_out" | "revoked" | "password_changed";
       token: string;
       userAgent?: null | string;
       userId: Id<"user">;
@@ -424,6 +424,7 @@ export type DataModel = {
       expiresAt: ["expiresAt", "_creationTime"];
       session_token_unique: ["token", "_creationTime"];
       userId: ["userId", "_creationTime"];
+      userId_status: ["userId", "status", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

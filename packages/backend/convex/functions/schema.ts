@@ -78,10 +78,11 @@ export const sessionTable = convexTable(
 		// "Expired" is deliberately NOT a status — it's derived from `expiresAt`
 		// vs. now, and making it a status would need a cron to maintain.
 		//
-		// TODO(migration): currently nullable so the backfill can run against
-		// existing rows; harden to `.notNull()` once `backfill_session_status`
-		// has completed everywhere. See docs/MIGRATION.md.
-		status: textEnum(SESSION_STATUSES),
+		// `.notNull()` since `20260816_234850_backfill_session_status` completed:
+		// every row now carries a real status, which is what lets the compound
+		// index below be queried with an equality on it. A nullable column would
+		// have made `eq(status, "active")` silently skip the pre-backfill rows.
+		status: textEnum(SESSION_STATUSES).notNull(),
 		expiresAt: timestamp().notNull(),
 		// Bumped by the `session.heartbeat` mutation only — Convex queries can't
 		// write, and this app's authenticated traffic is almost entirely queries.
@@ -101,9 +102,17 @@ export const sessionTable = convexTable(
 		userAgent: text(),
 	},
 	(sessionTable) => [
-		// Load-bearing now: the /users/$userId page lists a user's sessions and
-		// the /users list aggregates active-session counts, both by userId.
+		// Load-bearing: the /users/$userId page lists a user's sessions and the
+		// /users list aggregates active-session counts, both by userId alone.
 		index("userId").on(sessionTable.userId),
+		// Backs bulk termination (lib/end-user-sessions.ts). Field order matters:
+		// kitcn scores an index by how its fields line up with the ones the filter
+		// references, so `("userId", "status")` is what makes
+		// `and(eq(userId, …), eq(status, "active"))` compile to a real index range
+		// rather than an index scan plus a post-filter. Without it the read window
+		// is "the N newest rows whatever their status", and bulk termination
+		// cannot reach past the first N — see end-user-sessions.ts.
+		index("userId_status").on(sessionTable.userId, sessionTable.status),
 		index("expiresAt").on(sessionTable.expiresAt),
 	],
 );

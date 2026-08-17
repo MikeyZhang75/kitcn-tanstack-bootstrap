@@ -48,8 +48,12 @@ TypeScript error. Never reintroduce that shape. `session.revoke`'s "already
 ended" message uses the same exhaustive-record trick
 (`SESSION_ALREADY_ENDED_MESSAGES`).
 
-`index("userId")` is load-bearing now — it backs both the per-user session list
-and the `/users` active-session summary.
+Two indexes are load-bearing. `index("userId")` backs the per-user session list
+and the `/users` active-session summary, both of which read a user's rows
+regardless of status. `index("userId_status")` backs bulk termination — see
+「Revocation」 below for why the compound form is what makes the batch cap a batch
+rather than a ceiling. (`index("expiresAt")` is declared but currently unused by
+any query.)
 
 #### Where IP / User-Agent come from — `ctx.meta.getRequestMetadata()`
 
@@ -187,19 +191,37 @@ otherwise — Convex's 1-second limit counts user code only, two scrypt runs
 measure ~73 ms locally, and 200 rows costs ~401 index-range reads against a
 4,096 ceiling.
 
-🚨 **That cap is a hard ceiling, not a batch size.** The read compiles to
-`withIndex("userId").order("desc").take(200)` with **no `status` filter**, so a
-second call re-reads the same 200 newest rows — now terminal — and ends zero.
-See 「Known limitations」 below; don't write "drains over repeated calls" anywhere,
-because it doesn't.
+It is a genuine **batch size**: the window is "the 200 newest rows whose status
+is still `active`", so every row a call ends leaves the window and the next call
+picks up the next 200. That property is what the `userId_status` compound index
+buys, and it is the whole reason the index exists — see below.
 
-⚠️ **`orderBy: { createdAt: "desc" }` on that query is load-bearing, not
-cosmetic.** kitcn compiles a bare `eq(userId, …)` to `withIndex(...).take(n)`
-with Convex's default **ascending** order, so without it the cap would select
-the user's _oldest_ rows. Since rows are never deleted, any long-lived account
-accumulates ended sessions and the live ones — always newest — would fall
-outside the window, making 全部踢下线 silently revoke nothing while reporting
-success. The same reasoning applies to the `users.list` summary below.
+The query is `and(eq(userId, …), eq(status, "active"))`. Both equalities land in
+the index range: kitcn's `splitFilters` walks the chosen index's fields in order
+and consumes one `eq` per field, so nothing falls through to a post-fetch
+`.filter()` and `limit` is a real read bound. Keep the clause order matching the
+index's field order — kitcn scores an index by how its fields line up with the
+referenced ones.
+
+⚠️ **`orderBy: { createdAt: "desc" }` is still load-bearing, for a subtler
+reason than before.** Convex's default order is `_creationTime` ascending, so
+without it the batch would take the user's _oldest_ still-`active` rows — and
+those are exactly the expired ones. `expiresAt` is `createdAt + SESSION_TTL_MS`
+with a constant TTL, so "expired" is equivalent to "older", and expiry is never
+materialised into `status`; the in-memory expired-row guard would then drop
+every row the query returned and the call would end nothing while reporting
+success. Descending puts every live row ahead of every expired one. That
+equivalence is what a per-session TTL would break — if `SESSION_TTL_MS` stops
+being a constant, revisit this. The `users.list` summary below relies on
+"newest first" for its own reasons.
+
+> History: this used to filter on `userId` alone and sort the status out in
+> memory, which made the 200 a hard ceiling rather than a batch size — a second
+> call re-read the same 200 now-terminal rows and ended zero, so any live
+> session older than 200 others was permanently unreachable by every path
+> sharing this helper, reachable deliberately with 201 `session.signIn` calls.
+> Fixing it needed the `status` column hardened to `.notNull()` first, since an
+> indexed equality on `"active"` would otherwise have skipped pre-backfill rows.
 
 `listByUser` also returns `isCurrent` per row (derived from `ctx.session.id`,
 never from the token) so the UI can tag the admin's own session 本机 and warn
@@ -301,47 +323,35 @@ Details worth not breaking:
 `lastSeenAt` / `endedAt` / `revokedBy` are optional → no migration (see
 `docs/MIGRATION.md`).
 
-`status` is the exception and is currently **still nullable** with a
-`?? DEFAULT_SESSION_STATUS` fallback in `lib/crpc.ts`, `lib/end-user-sessions.ts`,
-`functions/session.ts` and `functions/users.ts`, plus a `TODO(migration)` in
-`schema.ts`. The
-`20260816_234850_backfill_session_status` migration sets `active` on
-pre-existing rows (every row that survived the old delete-on-sign-out design
-was by definition active). It has been run against dev. **Harden the column to
-`.notNull()` and delete the `??` fallbacks only after the backfill has run
-against production** — that's the second half of `docs/MIGRATION.md`'s
-required-field flow, and it must be triggered manually because this repo has no
-CI workflow. Doing so also unblocks the compound-index fix for the bulk-
-termination tail described under 「Known limitations」.
+`status` was the exception, and its required-field flow is now **complete**.
+`20260816_234850_backfill_session_status` set `active` on pre-existing rows
+(every row that survived the old delete-on-sign-out design was by definition
+active); the column is `.notNull()` and every `?? DEFAULT_SESSION_STATUS`
+fallback is gone. `DEFAULT_SESSION_STATUS` itself stays — `lib/create-session.ts`
+uses it as the initial value of a new row, which is not a fallback.
+
+The hardening is what unblocked the `userId_status` index, since an indexed
+equality on `"active"` would have skipped any row still carrying a null.
+
+⚠️ **The migration's `down` direction is no longer usable.** It writes
+`status: undefined`, which the hardened schema rejects. Don't "fix" the
+migration file either: kitcn's `computeMigrationChecksum` hashes the
+`migrateOne` source, so editing an already-applied migration trips checksum
+drift. Rolling back means un-hardening the column first.
+
+This repo has no CI workflow, so any future migration step is triggered by hand
+— see `docs/MIGRATION.md`.
 
 #### Known limitations
 
-- 🚨 **Bulk termination has an unreachable tail.** `SESSION_REVOKE_BATCH_MAX`
-  (200) bounds the _read window_, and that window is "the 200 newest rows for
-  this user" with no `status` filter — so a session older than 200 others can
-  never be terminated by `revokeAllForUser`, `account.changePassword`, or
-  `users.resetPassword`, and calling any of them again re-reads the same
-  already-dead 200 and ends nothing. Reaching that state is cheap and
-  deliberate: `session.signIn` is an unauthenticated `publicMutation`, so
-  someone holding the password can mint 201 sessions, and the session they minted
-  first then survives every later password change and every 踢下线 for its full
-  30-day TTL.
-
-  **The fix** is a compound `("userId", "status")` index plus
-  `eq(fields.status, "active")` in `lib/end-user-sessions.ts`, which makes the
-  window "the 200 newest _terminable_ rows" and genuinely drains across calls.
-  It is **blocked on hardening `session.status` to `.notNull()`**: the column is
-  still nullable, a null means active (hence every `?? DEFAULT_SESSION_STATUS`),
-  and an indexed equality on `"active"` would silently skip those rows. Do the
-  backfill-and-harden flow in `docs/MIGRATION.md` first, then this.
-
-  This predates password management — `revokeAllForUser` shipped with it — but
-  password change inherits it, which is worse: that path exists specifically to
-  eject an attacker.
+- **`session.signIn` is unauthenticated and unthrottled**, so anyone holding a
+  password can mint session rows at will. Bulk termination drains across
+  repeated calls now, so those rows are all reachable — but nothing stops the
+  minting itself. That's the rate-limiting gap recorded in [auth](auth.md), not
+  a revocation gap.
 
 - **Nothing prunes the table.** Rows are never deleted by design, so `session`
-  grows monotonically. A retention cron is a reasonable follow-up — and it would
-  also shrink the unreachable tail above.
+  grows monotonically. A retention cron is a reasonable follow-up.
 - **No failed-login record.** Failed attempts arrive on an unauthenticated
   write path; recording them without rate limiting in front would let anyone
   inflate the table.
