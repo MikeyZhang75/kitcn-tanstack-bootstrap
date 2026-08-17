@@ -34,6 +34,7 @@ says to **skip migrations for backward-compatible changes**:
 
 - Adding **optional** fields (`text()` without `.notNull()`)
 - Adding **new tables** or new indexes
+- **Widening** a `textEnum(...)` — adding a value, not removing one
 - Anything a code-level default (`doc.field ?? "…"`) can cover
 
 **Rule:** old documents still pass the schema and the app logic → no
@@ -43,6 +44,13 @@ Everything below in this file is about the cases that _violate_ that rule.
 `.notNull()` is the trigger: the deploy fails at schema validation if any
 existing row lacks the field. An optional column has no such edge — a document
 without the key satisfies `v.optional(...)`.
+
+Enum widening is safe for the same structural reason. kitcn's `textEnum`
+compiles to `v.union(v.literal(...))`, so adding a value only expands the
+accepted set and every stored row still validates on push. **Narrowing** —
+removing a value — is the direction that needs a migration, and kitcn's own
+reference lists it as such. Nothing else has to be rebuilt either, as long as the
+column isn't part of an index or an `aggregateIndex`.
 
 Worked example — the session audit feature, which needed both kinds:
 
@@ -54,6 +62,17 @@ Worked example — the session audit feature, which needed both kinds:
   before the column existed. Follow the flow below.
 
 See [session audit](feature-session-audit.md).
+
+Second worked example — password management ([auth](auth.md) 「密码管理」) — which
+needed **no** migration at all despite touching the schema twice:
+
+- `credentials.passwordUpdatedAt` / `passwordUpdatedBy` are optional columns.
+- `session.status` gained a fourth value, `password_changed` — a widening.
+
+⚠️ Do **not** bundle an enum widening with the still-pending `.notNull()`
+hardening of `session.status`. The widening is unconditionally safe; the
+hardening still requires the backfill to have run against **prod** first (step 4
+below, which must be triggered by hand). Ship them as separate deploys.
 
 ## Adding a Required Field to an Existing Table
 

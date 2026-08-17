@@ -63,6 +63,43 @@ export const signUpWithInvitationInputSchema = z.object({
 	invitationCode: invitationCodeInputSchema.optional(),
 });
 
+// ─── Password management ───────────────────────────────────────────────────
+// Two paths, deliberately separate procedures with different authorization:
+//   - `account.changePassword` — the signed-in user, proving the current
+//     password.
+//   - `users.resetPassword`    — an admin overriding someone else's, with no
+//     such proof (they don't have it).
+// See docs/auth.md 「密码管理」 for the session-termination semantics.
+//
+// ⚠️ Neither schema carries a top-level `.refine()`, and neither should. It
+// would run — zod 4's `.refine()` returns the same `ZodObject`, so kitcn's
+// `.shape`-based input merge is fine — but kitcn's `parseInput` throws
+// `ConvexError({ ZodError })` from OUTSIDE the handler's try block, bypassing
+// the error normalizer; the client's `normalizeError` then finds no
+// `code`/`message` and degrades to a generic 「出现错误」 toast, breaking the
+// `{ code, message, data? }` envelope. Cross-field rules go in the procedure
+// body ("新密码不能与当前密码相同") or in the form ("两次输入的密码不一致").
+// A schema carrying checks also can't be `.extend()`/`.omit()`/`.merge()`d
+// afterwards, and this module already composes schemas across files.
+
+// `currentPassword` deliberately does NOT reuse `passwordSchema` — same reason
+// as `signInInputSchema` above: the min-length policy governs *new* passwords,
+// and an account whose password predates a policy bump must still be able to
+// prove it. Only `newPassword` is held to the current policy.
+export const changePasswordInputSchema = z.object({
+	currentPassword: z.string().min(1, "请输入当前密码"),
+	newPassword: passwordSchema,
+});
+
+// The confirm-password field is UI-only and is NOT declared here: Convex
+// validates procedure args strictly, so every declared field is one the client
+// must transmit — declaring it would ship the new password twice over the wire
+// for a check the form already did.
+export const resetPasswordInputSchema = z.object({
+	userId: z.string().min(1),
+	newPassword: passwordSchema,
+});
+
 // ─── Admin user browser ────────────────────────────────────────────────────
 // Offset pagination for the dashboard `/users` list, same shape and cap as the
 // invitations list.

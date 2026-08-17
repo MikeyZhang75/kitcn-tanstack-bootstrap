@@ -14,13 +14,15 @@ import {
 	Result,
 	Skeleton,
 	Tag,
+	Tooltip,
 	Typography,
 } from "antd";
 import { useCallback, useMemo, useState } from "react";
 
-import { dateFormat } from "../-lib/format";
+import { dateFormat, renderDateTime } from "../-lib/format";
 import { useOffsetPagination } from "../-lib/pagination";
 import type { SessionRow } from "../-model/session-row";
+import { ResetPasswordDialog } from "./-components/reset-password-dialog";
 import { RevokeAllDialog } from "./-components/revoke-all-dialog";
 import { RevokeSessionDialog } from "./-components/revoke-session-dialog";
 import { UserSessionsTable } from "./-components/user-sessions-table";
@@ -43,6 +45,10 @@ function UserDetailPage() {
 
 	const userQuery = useQuery(crpc.users.get.queryOptions({ id: userId }));
 	const user = userQuery.data?.data?.user;
+	const password = userQuery.data?.data?.password;
+	// 后端也会拒绝管理员重置自己（那条路径不需要出示当前密码，允许自重置等于给
+	// 被窃 token 开一条绕过通道），这里只是提前把按钮禁掉并说明去哪儿改。
+	const isSelf = currentUser?.id === userId;
 
 	const countQuery = useQuery(
 		crpc.session.countByUser.queryOptions({ userId }),
@@ -85,10 +91,14 @@ function UserDetailPage() {
 
 	const [revoking, setRevoking] = useState<SessionRow | null>(null);
 	const [revokeAllOpen, setRevokeAllOpen] = useState(false);
+	const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
 
 	const revokeMutation = useMutation(crpc.session.revoke.mutationOptions());
 	const revokeAllMutation = useMutation(
 		crpc.session.revokeAllForUser.mutationOptions(),
+	);
+	const resetPasswordMutation = useMutation(
+		crpc.users.resetPassword.mutationOptions(),
 	);
 
 	const handleRevoke = useCallback((session: SessionRow) => {
@@ -129,6 +139,24 @@ function UserDetailPage() {
 		);
 	};
 
+	const handleResetPasswordConfirm = (newPassword: string) => {
+		resetPasswordMutation.mutate(
+			{ userId, newPassword },
+			{
+				onSuccess: (result) => {
+					const revoked = result.data.revokedSessions;
+					message.success(
+						revoked > 0 ? `密码已重置，已终止 ${revoked} 个会话` : "密码已重置",
+					);
+					setResetPasswordOpen(false);
+				},
+				onError: (err) => {
+					message.error(extractErrorMessage(err) ?? "重置失败");
+				},
+			},
+		);
+	};
+
 	if (userQuery.isPending) {
 		return <Skeleton active paragraph={{ rows: 4 }} />;
 	}
@@ -163,9 +191,23 @@ function UserDetailPage() {
 						会话记录。终止后该设备立即登出，记录保留。
 					</Typography.Text>
 				</div>
-				<Button danger onClick={() => setRevokeAllOpen(true)}>
-					全部踢下线
-				</Button>
+				<Flex gap={8}>
+					<Tooltip
+						title={
+							isSelf ? "请从侧边栏底部的用户菜单修改自己的密码" : undefined
+						}
+					>
+						<Button
+							disabled={isSelf}
+							onClick={() => setResetPasswordOpen(true)}
+						>
+							重置密码
+						</Button>
+					</Tooltip>
+					<Button danger onClick={() => setRevokeAllOpen(true)}>
+						全部踢下线
+					</Button>
+				</Flex>
 			</Flex>
 
 			<Descriptions
@@ -186,6 +228,21 @@ function UserDetailPage() {
 						key: "createdAt",
 						label: "注册时间",
 						children: dateFormat.format(new Date(user.createdAt)),
+					},
+					{
+						key: "passwordUpdatedAt",
+						label: "密码更新时间",
+						children: renderDateTime(
+							password?.updatedAt ? new Date(password.updatedAt) : null,
+						),
+					},
+					{
+						key: "passwordUpdatedBy",
+						label: "密码更新人",
+						// 用户被删掉时名字解析不出来，退回原始 id；从没改过密码则画横杠。
+						children: password?.updatedByName ?? password?.updatedBy ?? (
+							<Typography.Text type="secondary">—</Typography.Text>
+						),
 					},
 				]}
 				size="small"
@@ -209,10 +266,18 @@ function UserDetailPage() {
 
 			<RevokeAllDialog
 				isPending={revokeAllMutation.isPending}
-				isSelf={currentUser?.id === userId}
+				isSelf={isSelf}
 				onConfirm={handleRevokeAllConfirm}
 				onOpenChange={setRevokeAllOpen}
 				open={revokeAllOpen}
+				username={user.username}
+			/>
+
+			<ResetPasswordDialog
+				isPending={resetPasswordMutation.isPending}
+				onConfirm={handleResetPasswordConfirm}
+				onOpenChange={setResetPasswordOpen}
+				open={resetPasswordOpen}
 				username={user.username}
 			/>
 		</Flex>

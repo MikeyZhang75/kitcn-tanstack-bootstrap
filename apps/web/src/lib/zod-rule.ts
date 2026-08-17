@@ -21,3 +21,25 @@ export function zodStringRule(schema: ZodType): FormRule {
 		},
 	};
 }
+
+/**
+ * 「本字段必须等于另一个字段」的校验，用于确认密码这类二次输入。
+ *
+ * `zodStringRule` 表达不了跨字段比较 —— 它只吃一个 `ZodType` 和一个值，所以这里
+ * 用 antd 的函数式规则（`RuleRender`）拿到 form 实例。别忘了在 `Form.Item` 上配
+ * `dependencies={[otherField]}`，否则先填确认框、再改原字段时不会重新校验。
+ *
+ * 文案留在前端是对的：确认字段从不发给后端，没有任何 canonical schema 声明它。
+ * 空值不报错，交给该字段自己的 `zodStringRule` 去说「必填」。
+ */
+export function matchesFieldRule(
+	otherField: string,
+	message: string,
+): FormRule {
+	return ({ getFieldValue }) => ({
+		validator: (_rule, value: unknown) =>
+			!value || getFieldValue(otherField) === value
+				? Promise.resolve()
+				: Promise.reject(new Error(message)),
+	});
+}

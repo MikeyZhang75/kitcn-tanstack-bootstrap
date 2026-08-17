@@ -7,7 +7,7 @@ import { signInInputSchema } from "@repo/backend/shared/tables/user";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { App, Button, Card, Flex, Form, Input, Typography } from "antd";
 
-import { zodStringRule } from "./-lib/zod-rule";
+import { zodStringRule } from "@/lib/zod-rule";
 
 type AuthSearch = {
 	callbackUrl?: string;

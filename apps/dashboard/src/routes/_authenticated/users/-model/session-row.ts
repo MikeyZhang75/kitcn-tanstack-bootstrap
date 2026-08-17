@@ -8,7 +8,7 @@ export type SessionRow = {
 	lastSeenAt: Date | null;
 	/** 离开 active 的时刻（用户退出或管理员终止） */
 	endedAt: Date | null;
-	/** 终止该会话的管理员 id / 用户名；用户自己退出时为 null */
+	/** 终止该会话的管理员 id / 用户名；用户自己退出或自助改密时为 null */
 	revokedBy: string | null;
 	revokedByName: string | null;
 	/** 建会话时的请求元数据，可能缺失 —— 见 backend shared/tables/session.ts */
@@ -20,7 +20,7 @@ export type SessionRow = {
 };
 
 /**
- * 界面上的四态：`status` 三种再加一个「已过期」——后者不是存储状态，而是
+ * 界面上的五态：`status` 四种再加一个「已过期」——后者不是存储状态，而是
  * `active` 且已过 `expiresAt` 推导出来的（做成状态就得靠 cron 维护）。
  */
 export type SessionDisplayStatus = SessionStatus | "expired";

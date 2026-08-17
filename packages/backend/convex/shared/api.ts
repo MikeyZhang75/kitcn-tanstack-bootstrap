@@ -10,6 +10,9 @@ import type { httpRouter } from "../functions/http";
 import type { tables } from "../functions/schema";
 
 export const api = {
+  account: {
+    changePassword: createApiLeaf<"mutation", typeof import("../functions/account").changePassword>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/account").changePassword>("account:changePassword"), { type: "mutation" }),
+  },
   invitations: {
     count: createApiLeaf<"query", typeof import("../functions/invitations").count>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/invitations").count>("invitations:count"), { type: "query" }),
     create: createApiLeaf<"mutation", typeof import("../functions/invitations").create>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/invitations").create>("invitations:create"), { type: "mutation" }),
@@ -37,6 +40,7 @@ export const api = {
     count: createApiLeaf<"query", typeof import("../functions/users").count>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").count>("users:count"), { type: "query" }),
     get: createApiLeaf<"query", typeof import("../functions/users").get>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").get>("users:get"), { type: "query" }),
     list: createApiLeaf<"query", typeof import("../functions/users").list>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/users").list>("users:list"), { type: "query" }),
+    resetPassword: createApiLeaf<"mutation", typeof import("../functions/users").resetPassword>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/users").resetPassword>("users:resetPassword"), { type: "mutation" }),
   },
   http: undefined as unknown as typeof httpRouter,
   _http: {

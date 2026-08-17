@@ -261,11 +261,19 @@ export type DataModel = {
   credentials: {
     document: {
       passwordHash: string;
+      passwordUpdatedAt?: null | number;
+      passwordUpdatedBy?: null | Id<"user">;
       userId: Id<"user">;
       _id: Id<"credentials">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "passwordHash" | "userId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "passwordHash"
+      | "passwordUpdatedAt"
+      | "passwordUpdatedBy"
+      | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -391,7 +399,7 @@ export type DataModel = {
       ipAddress?: null | string;
       lastSeenAt?: null | number;
       revokedBy?: null | Id<"user">;
-      status?: null | "active" | "signed_out" | "revoked";
+      status?: null | "active" | "signed_out" | "revoked" | "password_changed";
       token: string;
       userAgent?: null | string;
       userId: Id<"user">;
