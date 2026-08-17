@@ -39,6 +39,31 @@ mutation with a different `mode`. `rebuild` calls `clearCountIndexData()`
 before rescanning — any `count()` query against that index throws
 `BUILDING` until the rebuild finishes. `resume` skips already-READY indexes.
 
+⚠️ **Since kitcn 0.25.1, `backfill` and `rebuild` are a silent no-op in this
+repo.** `runAggregateBackfillFlow` now short-circuits (`return 0`) _locally_,
+without ever contacting the deployment, unless `schema.ts` declares an
+`aggregateIndex(...)` / `rankIndex(...)`. This repo declares none, so the
+sentence above holds only for `prune` — which is deliberately **not** gated and
+still round-trips. Practical consequences:
+
+- The verification step below (`aggregateBackfill progress N/M READY`) will
+  never fire for `backfill` / `rebuild` here — they exit 0 having done nothing.
+- The `keyDefinitionHash`-mismatch recovery advice under
+  [Automatic backfill hooks](#automatic-backfill-hooks) is likewise unreachable,
+  since that warning is emitted from inside the flow the guard skips.
+- `prune`'s output now distinguishes `pruned` from a scheduled-batch `pruning`
+  counter, and only reports `prune no-op` when both are zero.
+
+Add an `aggregateIndex(...)` to `schema.ts` and all of the documented behavior
+returns on its own — the guard is schema-driven, not a permanent removal.
+
+Also as of 0.25.1 these procedures live in a **different generated module**:
+`generated/aggregate:aggregateBackfill` (was `generated/server:aggregateBackfill`).
+`bun run codegen` emits `convex/functions/generated/aggregate.ts` +
+`aggregate.runtime.ts` and drops the three `aggregateBackfill*` exports from
+`generated/server.ts`; those regenerated files must be committed, and deployed,
+before `prune` will resolve.
+
 ### Triggering rebuild in prod (Convex Cloud)
 
 ```bash
@@ -91,6 +116,13 @@ Neither flow runs `rebuild`. If an index definition changes in a way that
 requires a rebuild (keyDefinitionHash mismatch), `kitcn deploy` logs a
 warning instructing you to run `kitcn aggregate rebuild` for that
 deployment — you must run it manually against the target.
+
+⚠️ Since 0.25.1 both hooks are gated by the same
+`schema.ts`-declares-an-aggregate-index check described above, so **neither
+fires in this repo today** — `kitcn dev` and `kitcn deploy` stop issuing the
+post-deploy `aggregateBackfill` call entirely. The migration flow is gated
+separately (on `convex/functions/migrations/manifest.ts` existing, which it
+does) and still runs normally.
 
 ## Flags worth knowing
 
