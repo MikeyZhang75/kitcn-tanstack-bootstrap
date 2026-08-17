@@ -45,9 +45,16 @@ Five tables in `schema.ts` (all plain app tables — kitcn manages none of them)
 - `user` — `username` (unique, lowercased login handle), `name` (display), `role`.
 - `credentials` — `userId` (unique FK → user), `passwordHash`. Kept separate
   from `user` so user projections never carry the hash.
-- `session` — `token` (unique, 64 hex chars), `userId` (FK → user), `expiresAt`.
-  The row's existence + `expiresAt` is the source of truth; there is nothing to
-  cryptographically verify.
+- `session` — `token` (unique, 64 hex chars), `userId` (FK → user), `status`
+  (`active` | `signed_out` | `revoked`), `expiresAt`, plus nullable
+  `lastSeenAt` / `endedAt` / `revokedBy` / `ipAddress` / `userAgent`.
+  **Rows are never deleted** — sign-out and admin revocation both flip
+  `status`, which is what makes this table the login audit trail. `status` +
+  `expiresAt` are the source of truth; there is nothing to cryptographically
+  verify. `ipAddress` / `userAgent` come from `ctx.meta.getRequestMetadata()`
+  at mint time and are **audit telemetry only** (the IP is client-spoofable);
+  `lastSeenAt` is written solely by the `session.heartbeat` mutation. Full
+  model in [session audit](feature-session-audit.md).
 - `invitations` — unchanged (see [feature-invitations](feature-invitations.md)).
 - `settings` — a single-row (singleton) `requireInvitationCode: boolean()`
   holding the global signup gate. The row is absent until an admin first toggles
@@ -69,17 +76,30 @@ new hashes) and compares in constant time.
 
 - `convex/functions/session.ts`:
   - `signIn` (`publicMutation`, input `signInInputSchema`) — find user by
-    lowercased username, verify password, mint a session row, return
-    `ok({ sessionToken })`. A single generic `用户名或密码错误` on any failure.
-  - `signOut` (`publicMutation`, input `signOutInputSchema`) — delete the
-    session row by token; idempotent.
+    lowercased username, verify password, mint a session row via
+    `lib/create-session.ts`, return `ok({ sessionToken })`. A single generic
+    `用户名或密码错误` on any failure.
+  - `signOut` (`publicMutation`, input `signOutInputSchema`) — **updates**
+    `status` to `signed_out` (+ `endedAt`); it does not delete the row. Only
+    `active` rows transition, so it stays idempotent and a late sign-out can't
+    overwrite an admin's `revoked` record.
+  - `heartbeat` (`authMutation.requires(USER_ROLES)`) — the only writer of
+    `lastSeenAt`, called by the client on an interval. Server-side throttled.
   - `me` (`authQuery.requires(USER_ROLES)`) — returns `ok({ user })` for the
     current identity. The **only** place the frontend asks the backend "who am
     I", used by the route gate + sidebar user menu.
+  - `listByUser` / `countByUser` (`authQuery.requires(["admin"])`) — one user's
+    sessions for the dashboard. `listByUser` **never projects `token`**.
+  - `revoke` / `revokeAllForUser` (`authMutation.requires(["admin"])`) — 踢下线.
+    `revokeAllForUser` always excludes the calling admin's own session.
+  - See [session audit](feature-session-audit.md) for all of the above.
+- `convex/functions/users.ts` — besides `bootstrapAdmin` (below), `list` /
+  `count` / `get` (`authQuery.requires(["admin"])`) back the dashboard `/users`
+  page.
 - `convex/functions/signup.ts` — `signUpWithInvitation` (`publicMutation`):
-  one atomic transaction creates the user + credential, mints a session, and
-  returns `ok({ sessionToken })` (the client is signed in immediately — no
-  separate sign-in round trip). Whether an invitation is required is the live
+  one atomic transaction creates the user + credential, mints a session (same
+  `createSession` helper), and returns `ok({ sessionToken })` (the client is
+  signed in immediately — no separate sign-in round trip). Whether an invitation is required is the live
   `settings.requireInvitationCode` flag (default `true`): when on it validates
   and consumes an `active` code (missing/used/revoked → `BAD_REQUEST`); when an
   admin has opened registration the `invitationCode` input is ignored. The
@@ -103,10 +123,14 @@ new hashes) and compares in constant time.
 `convex/lib/crpc.ts` is the sole authorization model. `authQuery.requires([...])`
 / `authMutation.requires([...])` each `.input(z.object({ sessionToken }))` (so
 Convex's strict arg validator accepts the token) then `.use(...)` middleware
-calls `resolveSessionUser`: look the token up in `session`, reject if
-missing/expired (`UNAUTHORIZED`), load the user, enforce the allowed roles
-(`FORBIDDEN`), and inject `ctx.user` (`{ id, username, name, role }` — there is
-no `ctx.userId`, use `ctx.user.id`). All reads, no `ctx.auth`. The roles tuple
+calls `resolveSession`: look the token up in `session`; reject if missing, if
+`status` is no longer `active` (sign-out or admin revocation — distinct Chinese
+messages), or if past `expiresAt` (all `UNAUTHORIZED`); load the user; enforce
+the allowed roles (`FORBIDDEN`); and inject `ctx.user`
+(`{ id, username, name, role }` — there is no `ctx.userId`, use `ctx.user.id`)
+plus `ctx.session` (`{ id, lastSeenAt }`, reused by `heartbeat` and
+`revokeAllForUser` so neither re-queries by token). All reads, no `ctx.auth`.
+The roles tuple
 is typed `readonly [UserRole, ...UserRole[]]` so `.requires([])` is a compile
 error, and forgetting `.requires(...)` is too (`authMutation` has only
 `.requires`, not `.input`).
@@ -118,11 +142,22 @@ aren't supported in the session-token model (a WS query/mutation reads the
 token from its input; an HTTP route would have to parse it from a header and
 resolve the session via an internal caller). Nothing needs that today.
 
+In particular, **recording a client's IP does not need one.** Convex exposes
+`ctx.meta.getRequestMetadata()` on mutations and actions (not queries), so
+sign-in / sign-up read the IP and User-Agent straight off the context. See
+[session audit](feature-session-audit.md) before reaching for `publicRoute`.
+
 `USER_ROLES`, `UserRole`, and the input schemas (`signInInputSchema`,
-`signUpWithInvitationInputSchema`, `bootstrapAdminInputSchema`) live in
+`signUpWithInvitationInputSchema`, `bootstrapAdminInputSchema`,
+`listUsersInputSchema`, `getUserInputSchema`) live in
 `packages/backend/convex/shared/tables/user.ts`; session constants
-(`SESSION_TTL_MS`, `sessionTokenSchema`, `signOutInputSchema`) in
-`shared/tables/session.ts`. Both are imported directly by the frontend.
+(`SESSION_TTL_MS`, `SESSION_STATUSES`, `SESSION_STATUS_LABELS`,
+`HEARTBEAT_INTERVAL_MS`, `LAST_SEEN_THROTTLE_MS`, `sessionTokenSchema`, and the
+`signOut` / list / revoke input schemas) in `shared/tables/session.ts` — which
+is also where the IP/User-Agent trust caveats are written down. All three
+modules (`user.ts`, `invitations.ts`, `session.ts`) are imported directly by
+the frontend for form rules, row types, status labels, and the heartbeat
+interval.
 
 #### Frontend (shared `packages/app-convex`)
 

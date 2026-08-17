@@ -5,6 +5,7 @@ import {
 	DashboardOutlined,
 	KeyOutlined,
 	SettingOutlined,
+	TeamOutlined,
 } from "@ant-design/icons";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { MenuProps } from "antd";
@@ -18,6 +19,7 @@ const { Sider } = Layout;
 const navItems = [
 	{ icon: <DashboardOutlined />, title: "仪表盘", to: "/" },
 	{ icon: <KeyOutlined />, title: "邀请码", to: "/invitations" },
+	{ icon: <TeamOutlined />, title: "用户", to: "/users" },
 	{ icon: <SettingOutlined />, title: "设置", to: "/settings" },
 ] as const;
 
@@ -36,6 +38,19 @@ export function AppSidebar({ collapsed, collapsedWidth }: AppSidebarProps) {
 		key: item.to,
 		label: <Link to={item.to}>{item.title}</Link>,
 	}));
+
+	// 前缀匹配而不是 `selectedKeys={[pathname]}` 精确匹配：detail 路由
+	// （`/users/$userId`）不等于任何一个导航项，精确匹配会让整个菜单失去高亮。
+	// `/` 必须按精确匹配处理，否则它是所有路径的前缀；同时取最长匹配，以后
+	// 加更深的嵌套也不会误命中父项。
+	const selectedKey = navItems
+		.filter((item) =>
+			item.to === "/"
+				? pathname === "/"
+				: pathname === item.to || pathname.startsWith(`${item.to}/`),
+		)
+		.map((item) => item.to)
+		.sort((a, b) => b.length - a.length)[0];
 
 	return (
 		<Sider
@@ -82,7 +97,7 @@ export function AppSidebar({ collapsed, collapsedWidth }: AppSidebarProps) {
 				<Menu
 					items={items}
 					mode="inline"
-					selectedKeys={[pathname]}
+					selectedKeys={selectedKey ? [selectedKey] : []}
 					style={{
 						borderInlineEnd: 0,
 						flex: 1,

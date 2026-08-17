@@ -1,7 +1,7 @@
 import { eq } from "kitcn/orm";
 
 import { authMutation, authQuery } from "../lib/crpc";
-import { chunkedInArray } from "../lib/orm-helpers";
+import { resolveUsernames } from "../lib/orm-helpers";
 import { error, ok } from "../lib/responses";
 import {
 	createInvitationInputSchema,
@@ -10,31 +10,7 @@ import {
 	revokeInvitationInputSchema,
 } from "../shared/tables/invitations";
 import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./generated/server";
 import { invitationsTable } from "./schema";
-
-async function resolveUsernames(
-	ctx: Pick<QueryCtx, "orm">,
-	ids: string[],
-): Promise<Map<string, string>> {
-	const result = new Map<string, string>();
-	if (ids.length === 0) return result;
-	const users = await chunkedInArray(ids, (batch) =>
-		ctx.orm.query.user.findMany({
-			where: (fields, { inArray }) => inArray(fields.id, batch),
-			columns: { id: true, username: true },
-			limit: batch.length,
-		}),
-	);
-	for (const user of users) {
-		// `username` is the canonical handle (lowercased on signup) and is a
-		// required column, so it's always present — the guard is belt-and-braces.
-		if (user.username) {
-			result.set(user.id, user.username);
-		}
-	}
-	return result;
-}
 
 // Page-number pagination via offset on the system `createdAt` (`_creationTime`)
 // order — newest first. No secondary index required. `limit: pageSize + 1` is

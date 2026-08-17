@@ -386,13 +386,30 @@ export type DataModel = {
   };
   session: {
     document: {
+      endedAt?: null | number;
       expiresAt: number;
+      ipAddress?: null | string;
+      lastSeenAt?: null | number;
+      revokedBy?: null | Id<"user">;
+      status?: null | "active" | "signed_out" | "revoked";
       token: string;
+      userAgent?: null | string;
       userId: Id<"user">;
       _id: Id<"session">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "expiresAt" | "token" | "userId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "endedAt"
+      | "expiresAt"
+      | "ipAddress"
+      | "lastSeenAt"
+      | "revokedBy"
+      | "status"
+      | "token"
+      | "userAgent"
+      | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];

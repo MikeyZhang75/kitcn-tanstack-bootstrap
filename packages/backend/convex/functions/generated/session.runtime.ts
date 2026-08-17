@@ -14,7 +14,12 @@ import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
+  "countByUser": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../session").countByUser>("session:countByUser"), () => (require("../session") as Record<string, unknown>)["countByUser"])],
+  "heartbeat": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../session").heartbeat>("session:heartbeat"), () => (require("../session") as Record<string, unknown>)["heartbeat"])],
+  "listByUser": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../session").listByUser>("session:listByUser"), () => (require("../session") as Record<string, unknown>)["listByUser"])],
   "me": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../session").me>("session:me"), () => (require("../session") as Record<string, unknown>)["me"])],
+  "revoke": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../session").revoke>("session:revoke"), () => (require("../session") as Record<string, unknown>)["revoke"])],
+  "revokeAllForUser": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../session").revokeAllForUser>("session:revokeAllForUser"), () => (require("../session") as Record<string, unknown>)["revokeAllForUser"])],
   "signIn": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../session").signIn>("session:signIn"), () => (require("../session") as Record<string, unknown>)["signIn"])],
   "signOut": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../session").signOut>("session:signOut"), () => (require("../session") as Record<string, unknown>)["signOut"])],
 } as const;

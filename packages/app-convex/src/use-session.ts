@@ -44,7 +44,15 @@ export function useSession(): {
 		enabled: sessionToken != null,
 	});
 
-	const user = (query.data?.data?.user ?? null) as SessionUser | null;
+	// `query.isError` must gate this: TanStack Query KEEPS the last successful
+	// `data` when a refetch fails. `session.me` is a live Convex subscription,
+	// so when a session is revoked (or expires) the query re-runs and throws
+	// UNAUTHORIZED — without this check the hook would keep handing back the
+	// stale user, and the `_authenticated` gate would leave an already-open tab
+	// signed in until the next full reload.
+	const user = query.isError
+		? null
+		: ((query.data?.data?.user ?? null) as SessionUser | null);
 
 	return {
 		sessionToken,

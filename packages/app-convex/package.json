@@ -10,7 +10,8 @@
 		"./crpc": "./src/crpc.tsx",
 		"./session-store": "./src/session-store.ts",
 		"./use-session": "./src/use-session.ts",
-		"./use-auth": "./src/use-auth.ts"
+		"./use-auth": "./src/use-auth.ts",
+		"./use-heartbeat": "./src/use-heartbeat.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"

@@ -63,6 +63,21 @@ export const signUpWithInvitationInputSchema = z.object({
 	invitationCode: invitationCodeInputSchema.optional(),
 });
 
+// ─── Admin user browser ────────────────────────────────────────────────────
+// Offset pagination for the dashboard `/users` list, same shape and cap as the
+// invitations list.
+
+export const USER_LIST_PAGE_SIZE_MAX = 100;
+
+export const listUsersInputSchema = z.object({
+	page: z.number().int().nonnegative(),
+	pageSize: z.number().int().min(1).max(USER_LIST_PAGE_SIZE_MAX),
+});
+
+export const getUserInputSchema = z.object({
+	id: z.string().min(1),
+});
+
 // Operator-only — consumed by the internal `users.bootstrapAdmin` mutation,
 // which creates the very first admin from a clean deployment (no existing
 // user, no invitation). Same shape as signup minus the invitation field.

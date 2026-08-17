@@ -1,3 +1,5 @@
+import type { QueryCtx } from "../functions/generated/server";
+
 // kitcn compiles `inArray` as a left-folded chain of `q.or()` calls, which
 // creates N levels of JSON nesting for N values. Convex's server-side JSON
 // parser has a ~64-level recursion limit, so large arrays blow up. 30 keeps
@@ -21,4 +23,37 @@ export async function chunkedInArray<TValue, TResult>(
 		results.push(...(await runQuery(batch)));
 	}
 	return results;
+}
+
+/**
+ * Resolve `user` ids to usernames in one batched lookup, for list procedures
+ * that render a human-readable owner column. Shared by the invitations list
+ * (`createdBy` / `usedBy`) and the session list (`revokedBy`) — each holds raw
+ * `Id<"user">` columns and needs the same id → username projection.
+ *
+ * Ids that don't resolve (user deleted after the referencing row was written)
+ * are simply absent from the returned map; call sites fall through to the raw
+ * id or an em-dash rather than failing the whole page.
+ */
+export async function resolveUsernames(
+	ctx: Pick<QueryCtx, "orm">,
+	ids: string[],
+): Promise<Map<string, string>> {
+	const result = new Map<string, string>();
+	if (ids.length === 0) return result;
+	const users = await chunkedInArray(ids, (batch) =>
+		ctx.orm.query.user.findMany({
+			where: (fields, { inArray }) => inArray(fields.id, batch),
+			columns: { id: true, username: true },
+			limit: batch.length,
+		}),
+	);
+	for (const user of users) {
+		// `username` is the canonical handle (lowercased on signup) and is a
+		// required column, so it's always present — the guard is belt-and-braces.
+		if (user.username) {
+			result.set(user.id, user.username);
+		}
+	}
+	return result;
 }

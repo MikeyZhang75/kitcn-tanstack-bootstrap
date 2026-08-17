@@ -15,6 +15,9 @@ import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
   "bootstrapAdmin": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("../users").bootstrapAdmin>("users:bootstrapAdmin"), () => (require("../users") as Record<string, unknown>)["bootstrapAdmin"])],
+  "count": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").count>("users:count"), () => (require("../users") as Record<string, unknown>)["count"])],
+  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").get>("users:get"), () => (require("../users") as Record<string, unknown>)["get"])],
+  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../users").list>("users:list"), () => (require("../users") as Record<string, unknown>)["list"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

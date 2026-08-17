@@ -28,6 +28,10 @@ Each doc below is imported into context. Read the relevant one(s) based on the t
 
 @docs/feature-invitations.md
 
+<!-- Session audit: sessions are never deleted (a `status` state machine replaces sign-out deletion), client IP + User-Agent via `ctx.meta.getRequestMetadata()` (mutations only, no HTTP route needed), `lastSeenAt` via a client heartbeat (Convex queries can't write), admin revocation (踢下线), and the dashboard `/users` slice. -->
+
+@docs/feature-session-audit.md
+
 <!-- Conventions: bun as package manager, oxc (oxfmt/oxlint) tooling + ignore list, `isPending` vs `isLoading`, `useReducer`-for-coupled-state rule, one-source-of-truth + shared-schema-per-procedure rules, feature branches + codegen workflow, kitcn deploy/migrate/aggregate target asymmetry. -->
 
 @docs/conventions.md
