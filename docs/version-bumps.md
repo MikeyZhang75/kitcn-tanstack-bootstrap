@@ -209,6 +209,7 @@ test plan if the surface area is non-trivial.
 | 2026-08-17 | `sonner`                   | 2.0.7    | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `@tanstack/react-table`    | 8.21.3   | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `kitcn`                    | 0.17.4   | 0.25.1   | all four workspaces                     | `8f9beee` |
+| 2026-08-21 | `kitcn`                    | 0.25.1   | 0.25.7   | all four workspaces                     | `849be17` |
 
 Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
 (`abcd641`) are a routine coupled bump — notes for those are in the section
@@ -414,6 +415,8 @@ comments, all corrected in the same commit:
   user". `IN_ARRAY_BATCH_SIZE = 30` in `lib/orm-helpers.ts` is **untouched
   and still correct** — the repo's only real `inArray` is on `id`, which has
   no leading index, so it still compiles to a left-folded `q.or` chain.
+  ⚠️ **Superseded at 0.25.4**, which replaced the fold with a flat variadic
+  `q.or(...)`; see the 0.25.7 notes below.
 - `orderBy` pushdown into Convex's `.order()` is now conditional on the
   selected index being **fully pinned by `eq`** filters. Every current query
   is safe; the trap is in editing them (add a range filter, or widen a
@@ -425,6 +428,115 @@ Also: kitcn dropped `svix` from its dependencies (webhooks — unused here),
 and `kitcn/orm` dropped 7 internal type exports, none of which the repo
 imports. Gates after the bump: `check:fix` clean, `typecheck` 5/5,
 `build` 2/2 (both apps prerender `/` → 200).
+
+### Notes on the 2026-08-21 kitcn 0.25.7 bump (0.25.1 → 0.25.7, 6 patches)
+
+**convex did not move, and could not.** kitcn's `convex` peer is
+`>=1.42 <1.45.0` at **both** 0.25.1 and 0.25.7 (the ranges are byte-identical —
+this bump neither widened nor narrowed it), and 1.44.0 is simultaneously npm
+`latest` and the highest version satisfying that ceiling. The only newer
+publish is `1.45.0-alpha.0`, which is out of range twice over: it's a
+prerelease, and under semver's default resolution a prerelease does not satisfy
+`<1.45.0`. So this is a **kitcn-only** bump — leave all four `convex` pins at
+`1.44.0`.
+
+Audited by diffing the published `dist/` of every intermediate patch
+(0.25.2 … 0.25.7), not by trusting the changelog. Method as before: `npm pack`
+each version into `/tmp`, strip the content hashes from chunk filenames _and_
+from in-file references, then `diff -r`. That normalization is what makes the
+surface tractable — only **12 dist files** differ across the whole span:
+`auth/index.d.ts`, `builder.js`, `capabilities.d.ts`, `cli.mjs`,
+`generated-contract-disabled.d.ts`, `local-env.mjs`,
+`orm/aggregate-index/index.js`, `orm/index.js`, `procedure-caller.js`,
+`procedure-name.d.ts`, `schema.js`, `where-clause-compiler.d.ts`.
+
+**Codegen emits one NEW file — `git commit -am` would ship a broken tree.**
+0.25.5 split the procedure-name lookup out of `generated/server.ts` into
+`convex/functions/generated/procedure-names.gen.ts` (**untracked** until you
+`git add` it by name). `generated/server.ts` correspondingly loses its inline
+21-entry literal and gains `import { procedureNames } from './procedure-names.gen';`
+plus a one-line `registerProcedureNameLookup(procedureNames, "convex/functions")`.
+Nothing is lost in the move — kitcn scrapes the existing literal out of the old
+`server.ts` first, and all 21 entries came through verbatim. This is the same
+class of hazard as 0.25.1's `aggregate.ts`, so the checklist in
+[conventions.md](conventions.md) already covers it: after codegen, `git status`
+for untracked files under `generated/` and grep `generated/server.ts` for
+`migrationCapability` (still present, still `capabilities: [migrationCapability()]`).
+
+The two-dot basename is deliberate and is **not** blocked by the "no hyphens in
+Convex module paths" rule: convex's bundler skips any entry-point basename
+containing more than one dot, so `procedure-names.gen.ts` never becomes a module
+path — same mechanism that already lets `*.runtime.ts` and `migrations.gen.ts`
+carry dots and hyphens. Verified in `convex/dist/cli.bundle.cjs`'s `entryPoints()`
+and corroborated by `_generated/api.d.ts`, which lists zero `runtime` modules.
+
+Codegen also leaves an **empty** `generated/migrations/` directory behind (0.25.7
+pre-creates runtime placeholders and `rmSync`s them in a `finally`). git doesn't
+track empty dirs, so it produces no diff — but don't blanket-`git add` the
+`generated/` directory; add the one new file by name.
+
+**The one hand-written change this bump required was a comment.** 0.25.4
+replaced kitcn's left-folded `inArray` compilation —
+`values.map(...).reduce((acc, c) => q.or(acc, c))`, whose serialized JSON depth
+grew as `2N + 1` — with a single flat variadic `q.or(...)` of constant depth.
+That is precisely the behavior `IN_ARRAY_BATCH_SIZE = 30` in
+`lib/orm-helpers.ts` was introduced to work around, so its comment (and the
+matching parenthetical in [feature-invitations.md](feature-invitations.md))
+became false and were rewritten. The constant itself stays: it's now
+belt-and-braces bounding how many `eq` terms one `.filter()` carries, and the
+repo's only real `inArray` is on `user.id`, which has no leading index and so
+still resolves as an unindexed scan per chunk. The 0.25.1 note above is marked
+superseded rather than rewritten in place.
+
+**Verified unchanged** (the useful half of a 6-patch audit — each diffed in
+source, not assumed):
+
+- `dist/react/` is **byte-identical**, so every decorator
+  (`queryOptions` / `staticQueryOptions` / `infiniteQueryOptions` / `queryKey` /
+  `queryFilter` / `infiniteQueryKey` / `mutationOptions`) is unchanged and
+  `authed-crpc-proxy.ts`'s token injection can't be bypassed by a new
+  args-carrying decorator.
+- `CRPCError`'s wire shape, so the `{ code, message, data? }` envelope and every
+  Simplified-Chinese toast still work; `executeMiddlewares` and `initCRPC`, so
+  `crpc.ts`'s `next({ ctx: { ...ctx, user, session } })` contract is intact.
+- `parseInput` is still called one statement _before_ the handler's `try`, so
+  the `.refine()` ban documented in [auth](auth.md) 「密码管理」 is still correctly
+  motivated — an `.input()` ZodError still escapes the normalizer.
+- `splitFilters` and `resolveIndexOrderPushdown`, so
+  `end-user-sessions.ts`'s `and(eq(userId), eq(status))` still pins both fields
+  of `index("userId_status")`, `orderBy` still pushes down, and
+  `SESSION_REVOKE_BATCH_MAX` is still a real read bound (the drain-across-calls
+  property in [feature-session-audit.md](feature-session-audit.md) holds).
+- `migrationCapability()` itself — no repeat of the 0.25.0 "compiles but fails
+  at call time" trap.
+- Every CLI target-resolution function (`extractConvexRunTargetArgs`,
+  `readConvexTargetEnvFile`, `backendUsesAggregateIndexes`,
+  `backendUsesMigrations`, `runAggregateBackfillFlow`), so
+  [kitcn-cli-guide.md](kitcn-cli-guide.md) and [MIGRATION.md](MIGRATION.md)
+  needed no edits: the `deploy`=prod / `migrate`+`aggregate`=dev asymmetry, the
+  aggregate short-circuit, ungated `prune`, and the `manifest.ts` gate all still
+  hold. `cli.mjs` is in fact byte-identical from 0.25.2 onward.
+- `_generated/` and `shared/api.ts` regenerate byte-identical, so the frontend's
+  entire type surface is untouched.
+
+Several advertised fixes are **unreachable here** and were confirmed dead by
+grep: 0.25.6's `.output()` / `.paginated()` error sanitization and its HTTP-route
+fault logging (no `.output()`, no `.paginated()`, and `http.ts` registers
+`router({})` with zero routes), and 0.25.3's aggregate `isNull` two-bucket fix
+(no `isNull`/`groupBy`, no `aggregateIndex()`, and both `count()` calls are
+unfiltered so they short-circuit before the aggregate compiler).
+
+**Known available follow-up (not taken here):** 0.25.2 switched kitcn's own
+internals from `import { z } from 'zod'` to `import * as z from 'zod'` to
+tree-shake zod's 53 locale modules. Measured against this repo's toolchain, the
+saving is currently **cancelled**: zod's named export is a materialized
+namespace object, so a single named import anywhere in the graph re-pins the
+whole locale set (531.5 kb with `{ z }`, 127.6 kb with `* as z`, 531.6 kb with
+both). Five backend files still use the named form —
+`convex/lib/crpc.ts` and `convex/shared/tables/{user,session,invitations,settings}.ts`
+— and all are in every Convex function's module graph. Switching them is a
+one-line-each change that only uses members present on the namespace, but it
+belongs in its own commit so a bundle-size regression stays bisectable.
 
 ## Pending (audit 2026-07-26)
 
