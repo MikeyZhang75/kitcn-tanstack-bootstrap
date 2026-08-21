@@ -27,7 +27,7 @@
 		"@tanstack/router-plugin": "^1.168.23",
 		"antd": "^6.6.0",
 		"convex": "1.44.0",
-		"kitcn": "0.25.1",
+		"kitcn": "0.25.7",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
 		"superjson": "^2.2.6",

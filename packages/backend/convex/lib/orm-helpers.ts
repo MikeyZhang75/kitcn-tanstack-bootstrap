@@ -1,17 +1,22 @@
 import type { QueryCtx } from "../functions/generated/server";
 
-// kitcn compiles `inArray` as a left-folded chain of `q.or()` calls, which
-// creates N levels of JSON nesting for N values. Convex's server-side JSON
-// parser has a ~64-level recursion limit, so large arrays blow up. 30 keeps
-// us well under the limit with comfortable headroom for future query depth.
+// kitcn < 0.25.4 compiled `inArray` as a left-folded chain of `q.or()` calls,
+// nesting the serialized filter ~2N deep and tripping Convex's ~64-level JSON
+// recursion limit. Since 0.25.4 it emits a single variadic `q.or(...)` — a flat
+// `$or` whose depth is constant in N — so that ceiling no longer bounds the
+// batch size. The cap is now belt-and-braces: it bounds how many `eq` terms a
+// single `.filter()` carries. Note the only caller looks up `user` by `id`,
+// which has no leading index, so each chunk is an unindexed scan — chunking
+// does not reduce read cost, it multiplies scans by ceil(N/30). Keep the cap or
+// inline it, but don't reinstate the recursion-limit rationale.
 export const IN_ARRAY_BATCH_SIZE = 30;
 
 /**
  * Run `runQuery` against `values` in chunks of {@link IN_ARRAY_BATCH_SIZE}
  * and concatenate the results. Callsites pass a lambda that captures the
  * target table (`ctx.orm.query.<table>`) and applies `inArray(fields.<col>,
- * batch)` — this helper owns the chunking loop so the recursion-limit
- * constraint lives in one place.
+ * batch)` — this helper owns the chunking loop so the batch size lives in one
+ * place.
  */
 export async function chunkedInArray<TValue, TResult>(
 	values: readonly TValue[],
