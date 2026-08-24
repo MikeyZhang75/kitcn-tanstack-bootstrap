@@ -210,6 +210,7 @@ test plan if the surface area is non-trivial.
 | 2026-08-17 | `@tanstack/react-table`    | 8.21.3   | —        | web, dashboard (removed)                | —         |
 | 2026-08-17 | `kitcn`                    | 0.17.4   | 0.25.1   | all four workspaces                     | `8f9beee` |
 | 2026-08-21 | `kitcn`                    | 0.25.1   | 0.25.7   | all four workspaces                     | `849be17` |
+| 2026-08-25 | `kitcn`                    | 0.25.7   | 0.27.3   | all four workspaces                     | `763ab6a` |
 
 Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
 (`abcd641`) are a routine coupled bump — notes for those are in the section
@@ -373,9 +374,10 @@ exports, gains `capabilities: [migrationCapability()]`, and repoints
 auto-injected `aggregate_state` table. `shared/api.ts` is unchanged.
 
 **convex is now version-capped.** The peer narrowed from `>=1.42` to
-`>=1.42 <1.45.0`. 1.44.0 (what all four workspaces pin, and still npm
-`latest`) satisfies it with zero slack above. Do **not** bump convex to
-1.45.x while kitcn is 0.25.1. Two soft mechanisms guard this and neither
+`>=1.42 <1.45.0`. 1.44.0 (what all four workspaces pin; npm `latest` moved on
+to 1.45.0 on 2026-08-21) satisfies it with zero slack above. Do **not** bump
+convex to 1.45.x while kitcn is 0.25.1–0.27.3 — the ceiling is byte-identical
+across that whole range. Two soft mechanisms guard this and neither
 fails a build: bun's peer warning, and — new in this delta — kitcn's own CLI,
 which computes an upper bound and warns on `codegen` / `deploy` / `dev` /
 `add` / `env` / `init` / `verify`. 0.17.4 checked only a floor. All four pins
@@ -433,12 +435,13 @@ imports. Gates after the bump: `check:fix` clean, `typecheck` 5/5,
 
 **convex did not move, and could not.** kitcn's `convex` peer is
 `>=1.42 <1.45.0` at **both** 0.25.1 and 0.25.7 (the ranges are byte-identical —
-this bump neither widened nor narrowed it), and 1.44.0 is simultaneously npm
-`latest` and the highest version satisfying that ceiling. The only newer
-publish is `1.45.0-alpha.0`, which is out of range twice over: it's a
-prerelease, and under semver's default resolution a prerelease does not satisfy
-`<1.45.0`. So this is a **kitcn-only** bump — leave all four `convex` pins at
-`1.44.0`.
+this bump neither widened nor narrowed it), and 1.44.0 remains the highest
+version satisfying that ceiling. It was also npm `latest` when this section was
+written; 1.45.0 final shipped hours later on 2026-08-21 and took the tag, one
+patch above the cap. The prerelease argument that used to carry this paragraph
+(`1.45.0-alpha.0` fails `<1.45.0` under semver's default resolution) is still
+true but no longer the point — 1.45.0 final is simply out of range. So this is
+a **kitcn-only** bump — leave all four `convex` pins at `1.44.0`.
 
 Audited by diffing the published `dist/` of every intermediate patch
 (0.25.2 … 0.25.7), not by trusting the changelog. Method as before: `npm pack`
@@ -538,12 +541,170 @@ both). Five backend files still use the named form —
 one-line-each change that only uses members present on the namespace, but it
 belongs in its own commit so a bundle-size regression stays bisectable.
 
+### Notes on the 2026-08-25 kitcn 0.27.3 bump (0.25.7 → 0.27.3, 8 releases)
+
+**No hand-written code change and no generated-file change was required.**
+`bun run codegen` reproduces the committed tree byte-for-byte and `git status`
+stays clean of untracked files — the first bump in three where that is true
+(0.25.1 added `generated/aggregate.ts` + `aggregate.runtime.ts`, 0.25.5 added
+`generated/procedure-names.gen.ts`). Every path helper in the codegen writer
+maps 1:1 between the two versions, so the file set is provably fixed, not just
+observed. `generated/server.ts` still carries
+`capabilities: [migrationCapability()]`, and `dist/orm/migrations/` is
+byte-identical — no repeat of the 0.25.0 "compiles but fails at call time" trap.
+Codegen still leaves an **empty** `generated/migrations/` directory behind
+(untracked by git, no diff); keep adding new generated files by name rather
+than `git add`-ing the directory.
+
+**convex could not move, again — and this time a real 1.45.0 exists.** kitcn's
+`convex` peer is `>=1.42 <1.45.0` at **every** version from 0.25.7 through
+0.27.3 inclusive, byte-identical; `cli.mjs:2180` still reads
+`SUPPORTED_CONVEX_VERSION = "1.44.0"` at the same line number, and the cap is
+`getNextMinorVersion` of it. convex 1.45.0 took npm `latest` on 2026-08-21, so
+"bump both to latest" is not satisfiable. Be honest about what the bound is:
+**it is auto-derived from a pinned version, not a tested one, and no concrete
+incompatibility was found.** kitcn imports exactly five public specifiers
+(`convex/{browser,nextjs,react,server,values}`) and all five subpath trees are
+byte-identical between 1.44.0 and 1.45.0; the only public type delta is one
+added line (`getServiceToken` promoted from `@internal`, already exported at
+runtime in 1.44.0). Two concrete costs argue against bumping anyway:
+
+- kitcn would warn on every command this repo runs.
+  `warnSupportedDependencyIssues` fires for `{add, codegen, deploy, dev, env,
+init, verify}` and checks the **installed** version before the declared spec,
+  so the exact `"1.44.0"` pin would not mask it. Reproduced verbatim:
+  `⚠️  kitcn expects convex >=1.42 <1.45.0; found 1.45.0. Run `bun add convex@1.44.0` when you can.`
+  It is warning-only but unsuppressable (`logger.warn`, no quiet flag), and
+  `packages/backend/package.json` runs all three of `kitcn dev` / `codegen` /
+  `deploy --yes`. `kitcn migrate` and `kitcn aggregate` emit nothing, so the
+  migration path gives no off-range signal at all.
+- convex 1.45.0 raises `engines.node` `>=18` → `>=20` and turns the Node < 20
+  soft warning into `process.exit(1)`. Its changelog does not mention this.
+  Harmless here today (no `engines` field, no `.nvmrc`, no CI), but kitcn's own
+  `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS` still lists 18, so kitcn will not rescue
+  a Node 18 host. Add `"engines": { "node": ">=20" }` to the root
+  `package.json` in whichever commit finally moves convex.
+
+Revisit when kitcn ships a `SUPPORTED_CONVEX_VERSION` of `1.45.x`; the two then
+move in one commit, as they have since 0.15.0.
+
+Audited by diffing the published `dist/` of all nine versions (0.25.7, 0.26.0–3,
+0.27.0–3), not by trusting the changelog. ⚠️ **The hash-normalization step from
+the previous audits has a silent data-loss bug — fix it before reusing it.**
+Naively stripping `-<8 chars>` from every chunk filename collapses the four
+root-level `types-*.d.ts` files onto one name, and the renames overwrite each
+other: 84 files in, 81 files out, three compared against the wrong counterpart.
+Only strip the hash when the stripped name is **unique within its directory**;
+otherwise leave the original name (colliding chunks kept identical hashes across
+this span, so they still pair up). With that fixed, exactly **18 dist files**
+differ across the whole span: `auth/index.{js,d.ts}`,
+`auth/start/server/index.{js,d.ts}`, `caller-factory.js`, `capabilities.d.ts`,
+`cli.mjs`, `create-schema.js`, `generated-contract-disabled.d.ts`,
+`local-env.mjs`, `orm/aggregate-index/index.js`, `orm/index.js`,
+`react/index.js`, `rsc/index.js`, `runtime.js`, `schema.js`, `solid/index.js`,
+`where-clause-compiler.d.ts`. kitcn's `package.json` differs by exactly the
+version string — no dependency, peer, or exports-map change.
+
+**Verified unchanged** — the useful half of an 8-release audit; each was diffed
+in source, not assumed:
+
+- `builder.js` is byte-identical, so `parseInput` still runs one statement
+  _outside_ the handler's `try` and the `.refine()` ban in [auth](auth.md)
+  「密码管理」 stays correctly motivated. `initCRPC`, `executeMiddlewares` and the
+  `next({ ctx })` contract come with it, so `crpc.ts`'s
+  `next({ ctx: { ...ctx, user, session } })` is intact.
+- `error.js`, `procedure-caller.js` and the whole `dist/server/` tree are
+  byte-identical → the `{ code, message, data? }` envelope, `errors.ts`'s
+  normalizer, and every symbol the committed `*.runtime.ts` files import.
+- `dist/react/index.d.ts` is byte-identical, and the decorator method-name set
+  is identical (15 names). ⚠️ Do **not** restate the 0.25.7 note's claim that
+  "`dist/react/` is byte-identical" — that was scoped to its own span, and
+  `react/index.js` **did** change at 0.27.1. The successor claim is the narrower
+  one: no new args-carrying decorator exists, so `authed-crpc-proxy.ts`'s token
+  injection cannot be bypassed.
+- `CRPCProviderInner`'s body — including every `useMemo` dependency array — is
+  identical, so `useCRPCClient()` is still referentially stable and the ref in
+  `use-heartbeat.ts` remains correctly motivated. `skipToken` handling is
+  identical at all six sites.
+- `splitFilters` and `resolveIndexOrderPushdown` are byte-identical, traced
+  end-to-end: `end-user-sessions.ts`'s `and(eq(userId), eq(status))` still
+  scores `index("userId_status")` above `index("userId")`, consumes both `eq`s
+  into the index range leaving no post-fetch filter, pins every index field so
+  `orderBy` still pushes into `.order('desc')`, and takes the `query.take(limit)`
+  branch — `SESSION_REVOKE_BATCH_MAX` is still a real read bound and bulk
+  termination still drains across calls. `users.list`'s per-user `.take(200)`
+  is likewise still a genuine cap.
+- `convexOr` is byte-identical, so the flat variadic `$or` holds and
+  `IN_ARRAY_BATCH_SIZE = 30` in `lib/orm-helpers.ts` keeps its 0.25.7 rationale.
+  Indexed-`inArray` multiProbe is unchanged, so the "one batched `inArray` can't
+  express newest-N-per-user" argument in
+  [feature-session-audit.md](feature-session-audit.md) still holds.
+- Unfiltered `count()` still short-circuits to the native Convex syscall before
+  touching the aggregate compiler, and `AggregateNoScanWhereArg` is
+  byte-identical — so `invitations.count` / `users.count` still need no
+  `aggregateIndex`, and `count({ where })` still fails to typecheck without one.
+- `findFirst` is **unchanged**; all 20 `ctx.orm.query.*.findFirst` call sites
+  keep identical cost and error semantics. 0.27.2's "page until match" rewrite
+  is the Better Auth adapter's `listOne` in `auth/index.js` — a different
+  function on a path this repo does not use.
+- `where-clause-compiler.d.ts`'s 314 diff lines at an identical byte count are
+  pure member reordering inside two object types — zero type-surface change.
+- The CLI's entire target-resolution surface: `deploy`=prod /
+  `migrate`+`aggregate`=dev asymmetry, the aggregate short-circuit, ungated
+  `prune`, and the `manifest.ts` gate. `cli.mjs`'s only diff is the Better Auth
+  template and generated-index regions, so
+  [kitcn-cli-guide.md](kitcn-cli-guide.md) and [MIGRATION.md](MIGRATION.md)
+  needed no edits.
+
+Real changes that **cannot reach this repo**, confirmed by grep rather than
+assumed: nested `with:` depth 3 → 10 with overflow flipped from silent
+truncation to a `RELATION_DEPTH_EXCEEDED` throw (0.27.0 — `schema.ts` declares
+no relations and the repo has zero `with:`); per-source `index` on
+`.union([...])` going from silently ignored to honored (0.26.3 — zero unions);
+composite Better Auth organization indexes added to the generated auth schema
+and the `convexBetterAuthReactStart` options breaking change (0.27.2 / 0.26.0 —
+the repo's only `kitcn/auth` import is `kitcn/auth/generated`, which is
+byte-identical, and there is no `better-auth` dependency at all); and the
+aggregate `CLEARING` drain fix (0.27.3 — no `aggregateIndex`/`rankIndex`).
+
+⚠️ **Two latent traps this bump introduces.** Neither has a call site today;
+both are type-reachable and would fail quietly.
+
+- **`queryFilter` through `useAuthedCRPC()` is permanently token-scoped.**
+  0.27.1 made `queryFilter()` with absent/empty args emit a **2-element prefix
+  key** that matches every args variant (before, it emitted
+  `[..., ..., undefined]`, which TanStack's `partialMatchKey` matched against
+  nothing). But `authed-crpc-proxy.ts` lists `"queryFilter"` in `ARGS_METHODS`
+  and `injectArgs` always returns `{ ...args, sessionToken }` — never empty — so
+  the prefix key is unreachable through the authed proxy and the filter is
+  pinned to one exact token value. It still matches today's queries, because they
+  all carry that same token; it stops matching the moment the token rotates
+  (`account.changePassword` mints a replacement). Fix when the first
+  `invalidateQueries(authed.X.queryFilter())` lands: give `queryFilter` its own
+  branch that forwards args **unchanged**. A filter key is a matching pattern,
+  never a wire payload, so it needs no token to satisfy Convex's arg validator —
+  which is the whole reason the injection exists. That change would also need a
+  carve-out noted at [auth](auth.md)'s list of injected decorators.
+- **`queryKey.length` is now semantically load-bearing.** `isConvexQuery` /
+  `isConvexAction` tightened from `length >= 2` to `>= 3` (0.27.1), the
+  mandatory companion to the above — a 2-element key reaching `hashConvexQuery`
+  would `convexToJson(undefined)` and throw. The repo **is** in this path
+  (`convex-provider.tsx` merges kitcn's `queryKeyHashFn` into the QueryClient
+  defaults), but every key it produces is 3-element. The trap is that a
+  hand-rolled 2-element key now degrades **silently** into a non-Convex query
+  that never opens a WS subscription, where 0.25.7 failed loudly at hash time.
+
+Gates after the bump: `oxfmt --check` clean, `oxlint --type-aware
+--max-warnings 0` clean, `typecheck` 5/5, `build` 2/2 (both apps prerender `/`
+→ 200).
+
 ## Pending (audit 2026-07-26)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope               | Risk | Notes                                                                                                                                                                                      |
-| ------------ | ------- | ------ | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `typescript` | 6.0.3   | 7.0.2  | all five workspaces | high | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1. |
-| `turbo`      | 2.10.6  | 2.10.7 | root                | low  | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.     |
+| Package      | Current | Latest | Scope               | Risk    | Notes                                                                                                                                                                                                                                                                                                                                                         |
+| ------------ | ------- | ------ | ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typescript` | 6.0.3   | 7.0.2  | all five workspaces | high    | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1.                                                                                                                                                                    |
+| `turbo`      | 2.10.6  | 2.10.7 | root                | low     | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.                                                                                                                                                                        |
+| `convex`     | 1.44.0  | 1.45.0 | all four workspaces | blocked | Out of kitcn's `>=1.42 <1.45.0` peer, which is byte-identical at every version through 0.27.3 (`SUPPORTED_CONVEX_VERSION` is still `1.44.0`). No concrete incompatibility was found in source, but bumping trips an unsuppressable kitcn warning on `dev`/`codegen`/`deploy`. Revisit when kitcn's supported convex reaches 1.45.x; see the 2026-08-25 notes. |
