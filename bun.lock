@@ -29,7 +29,7 @@
         "@tanstack/router-plugin": "^1.168.23",
         "antd": "^6.6.0",
         "convex": "1.44.0",
-        "kitcn": "0.27.3",
+        "kitcn": "0.32.1",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "superjson": "^2.2.6",
@@ -69,7 +69,7 @@
         "@tanstack/router-plugin": "^1.168.23",
         "antd": "^6.6.0",
         "convex": "1.44.0",
-        "kitcn": "0.27.3",
+        "kitcn": "0.32.1",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "superjson": "^2.2.6",
@@ -98,7 +98,7 @@
         "@tanstack/react-query": "5.101.4",
         "@tanstack/react-start": "^1.168.32",
         "convex": "1.44.0",
-        "kitcn": "0.27.3",
+        "kitcn": "0.32.1",
         "superjson": "^2.2.6",
       },
       "devDependencies": {
@@ -119,7 +119,7 @@
         "@noble/hashes": "2.2.0",
         "convex": "1.44.0",
         "hono": "4.12.32",
-        "kitcn": "0.27.3",
+        "kitcn": "0.32.1",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -949,7 +949,7 @@
 
     "json5": ["json5@2.2.3", "", { "bin": { "json5": "lib/cli.js" } }, "sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg=="],
 
-    "kitcn": ["kitcn@0.27.3", "", { "dependencies": { "@babel/parser": "^7.28.4", "@better-fetch/fetch": "^1.1.21", "@clack/prompts": "^0.11.0", "chokidar": "^5.0.0", "common-tags": "^1.8.2", "diff": "^8.0.2", "dotenv": "^17.3.1", "esbuild": "^0.27.3", "execa": "^9.6.1", "jiti": "^2.6.1", "jose": "^6.1.3", "jotai": "^2.18.0", "jotai-x": "^2.3.3", "picocolors": "^1.1.1", "remeda": "^2.33.6", "type-fest": "^5.4.4", "typescript": "5.9.3" }, "peerDependencies": { "@tanstack/query-core": ">=5", "@tanstack/react-query": ">=5", "@tanstack/react-start": ">=1", "@tanstack/solid-query": ">=5", "better-auth": ">=1.6.11 <1.7.0", "convex": ">=1.42 <1.45.0", "hono": "4.12.9", "next": ">=14", "react": ">=18", "solid-js": ">=1.8", "zod": ">=4" }, "optionalPeers": ["@tanstack/react-query", "@tanstack/react-start", "@tanstack/solid-query", "better-auth", "hono", "next", "react", "solid-js"], "bin": { "kitcn": "dist/cli.mjs", "intent": "bin/intent.js" } }, "sha512-JFrs1W5qSOPAc+l8fcGykOdW9ijYx5LF4botnh5SSbhFKbNEApmdeVSdDrzBL+4PEWdreicKDo4pYbkiXxIUSQ=="],
+    "kitcn": ["kitcn@0.32.1", "", { "dependencies": { "@babel/parser": "^7.28.4", "@better-fetch/fetch": "^1.1.21", "@clack/prompts": "^0.11.0", "chokidar": "^5.0.0", "common-tags": "^1.8.2", "diff": "^8.0.2", "dotenv": "^17.3.1", "esbuild": "^0.27.7", "execa": "^9.6.1", "jiti": "^2.6.1", "jose": "^6.1.3", "jotai": "^2.18.0", "jotai-x": "^2.3.3", "picocolors": "^1.1.1", "remeda": "^2.33.6", "type-fest": "^5.4.4", "typescript": "5.9.3" }, "peerDependencies": { "@tanstack/query-core": ">=5", "@tanstack/react-query": ">=5", "@tanstack/react-start": ">=1", "@tanstack/solid-query": ">=5", "better-auth": ">=1.7.0 <1.8.0", "convex": ">=1.42 <1.45.0", "hono": "4.12.9", "next": ">=14", "react": ">=18", "solid-js": ">=1.8", "zod": ">=4" }, "optionalPeers": ["@tanstack/react-query", "@tanstack/react-start", "@tanstack/solid-query", "better-auth", "hono", "next", "react", "solid-js"], "bin": { "kitcn": "dist/cli.mjs", "intent": "bin/intent.js" } }, "sha512-f2sLNfY0iJC+BIqNVP+l8uRJr7tvBIZruZ0QESWBmDFzWc5L/OINMMphxchS49bqu2UWFiIKim8mPlEn4JtYfQ=="],
 
     "kleur": ["kleur@4.1.5", "", {}, "sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ=="],
 
