@@ -152,18 +152,13 @@ export declare const internal: {
         any,
         any
       >;
-      aggregateBackfillStatus: FunctionReference<
-        "mutation",
-        "internal",
-        any,
-        any
-      >;
+      aggregateBackfillStatus: FunctionReference<"query", "internal", any, any>;
     };
     server: {
       migrationCancel: FunctionReference<"mutation", "internal", any, any>;
       migrationRun: FunctionReference<"mutation", "internal", any, any>;
       migrationRunChunk: FunctionReference<"mutation", "internal", any, any>;
-      migrationStatus: FunctionReference<"mutation", "internal", any, any>;
+      migrationStatus: FunctionReference<"query", "internal", any, any>;
       reset: FunctionReference<"action", "internal", any, any>;
       resetChunk: FunctionReference<
         "mutation",

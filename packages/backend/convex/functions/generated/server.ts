@@ -19,7 +19,7 @@ import type {
   MutationCtx as ServerMutationCtx,
   QueryCtx as ServerQueryCtx,
 } from '../_generated/server';
-import { httpAction, internalMutation } from '../_generated/server';
+import { httpAction, internalMutation, internalQuery } from '../_generated/server';
 import schema from '../schema';
 import { procedureNames } from './procedure-names.gen';
 import { migrations } from '../migrations/manifest';
@@ -42,6 +42,7 @@ export const orm = createOrm({
   capabilities: [migrationCapability()],
   migrations,
   internalMutation,
+  internalQuery,
 });
 
 export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof ormSchema>;

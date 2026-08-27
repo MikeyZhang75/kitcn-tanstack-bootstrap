@@ -172,7 +172,7 @@ export type DataModel = {
   aggregate_rank_node: {
     document: {
       aggregate?: null | { count: number; sum: number };
-      items: Array<{ k: null | any; s: number; v: null | any }>;
+      items: Array<{ k: any; s: number; v: any }>;
       subtrees: Array<string>;
       _id: Id<"aggregate_rank_node">;
       _creationTime: number;
@@ -195,6 +195,7 @@ export type DataModel = {
   aggregate_rank_tree: {
     document: {
       aggregateName: string;
+      deletionStack?: null | Array<Id<"aggregate_rank_node">>;
       maxNodeSize: number;
       namespace?: null | any;
       root: Id<"aggregate_rank_node">;
@@ -205,6 +206,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "aggregateName"
+      | "deletionStack"
       | "maxNodeSize"
       | "namespace"
       | "root";
@@ -345,6 +347,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_run_id: ["runId", "_creationTime"];
+      by_started_at: ["startedAt", "_creationTime"];
       by_status: ["status", "_creationTime"];
     };
     searchIndexes: {};
