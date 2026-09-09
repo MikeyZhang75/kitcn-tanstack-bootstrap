@@ -212,6 +212,7 @@ test plan if the surface area is non-trivial.
 | 2026-08-21 | `kitcn`                    | 0.25.1   | 0.25.7   | all four workspaces                     | `849be17` |
 | 2026-08-25 | `kitcn`                    | 0.25.7   | 0.27.3   | all four workspaces                     | `763ab6a` |
 | 2026-08-28 | `kitcn`                    | 0.27.3   | 0.32.1   | all four workspaces                     | `564096a` |
+| 2026-09-09 | `kitcn`                    | 0.32.1   | 0.32.2   | all four workspaces                     | `1226666` |
 
 Two unrelated things landed on 2026-08-17. The `kitcn` / `convex` rows
 (`abcd641`) are a routine coupled bump — notes for those are in the section
@@ -751,13 +752,152 @@ Gates after the bump: `oxfmt` + `oxlint --type-aware --fix` clean, `typecheck`
 Cloudflare's `cf` placeholder object over the network; it falls back and the
 build succeeds. Pre-existing and unrelated.
 
+### Notes on the 2026-09-09 kitcn 0.32.2 bump (0.32.1 → 0.32.2, 1 patch)
+
+**No hand-written change and no generated-file change was required.**
+`bun run codegen` reproduces the committed tree byte-for-byte and
+`git status --untracked-files=all` stays clean of additions under `generated/`
+— so unlike 0.25.1 (`aggregate.ts`) and 0.25.5 (`procedure-names.gen.ts`) there
+is nothing to `git add` by name. `generated/server.ts` still carries
+`capabilities: [migrationCapability()]`. This is guaranteed rather than merely
+observed: `dist/cli.mjs` is **byte-identical** between 0.32.1 and 0.32.2
+(md5 `59a6c50a3a3b5b0781640a95cb296ae6`), as is its only chunk dependency
+`dist/local-env.mjs`, and those two are the entire codegen writer — a
+repo-wide grep for `writeFileSync|writeFile|mkdirSync` across `dist/` and
+`bin/` hits nothing else.
+
+**convex still could not move.** kitcn 0.32.2's `convex` peer is unchanged at
+`>=1.42 <1.45.0` (byte-identical `peerDependencies`; `SUPPORTED_CONVEX_VERSION`
+is still `"1.44.0"`), and convex `latest` is 1.45.0 — one patch above the cap.
+All four `convex` pins stay at `1.44.0`; this is a **kitcn-only** bump, and
+`bun install` emitted no peer warning. Re-verified the substance of the
+2026-08-25 finding at 1.45.0: the five subpaths kitcn actually imports
+(`convex/{browser,nextjs,react,server,values}`) are **byte-identical** between
+1.44.0 and 1.45.0, so the bound is still auto-derived from a pinned version
+rather than a tested incompatibility. `engines.node` `>=18` → `>=20` also still
+applies — add `"engines": { "node": ">=20" }` to the root `package.json` in
+whichever commit finally moves convex.
+
+**The delta is the smallest of any kitcn bump so far: 12 files, exactly one
+runtime `.js`.** Only `dist/orm/index.js` changed (8 hunks); everything else is
+`.d.ts`, `CHANGELOG.md`, or the version string. Byte-identical and therefore
+untouched: `cli.mjs`, `local-env.mjs`, `builder.js`, `react/index.js`,
+`server/index.js`, `error.js`, `procedure-caller.js`.
+
+Both behavioral changes are **relation-loading only**, and this repo is
+relation-free by explicit design (`convex/functions/schema.ts:150` documents
+why), so neither has a call site:
+
+- **Perf**: a new per-execution memo `_firstDocumentByFieldKey` +
+  `_firstByFields()` for relation targets joined on a non-`id` column. Its
+  three call sites are `_count` on a `through` relation, `_loadOneRelation`,
+  and the `through` target fetch — all require `.relations(...)` plus
+  `with:` / `_count`, of which the repo has zero.
+- **Correctness**: `_ownedCopy()` shallow-copies memoized documents so two
+  relation loads can no longer publish each other's fields. This is the one
+  change that touches pre-existing code — the two return paths of `_getById`,
+  which _also_ serves a non-relation id-lookup fast path. That path is
+  unreachable here too, for two independent reasons: it needs an
+  **object-form** `where` keyed exactly on `id`, and every id-keyed `where` in
+  the backend is **callback form** (`lib/crpc.ts:85`, `lib/orm-helpers.ts:51`,
+  `invitations.ts:175`, `users.ts:176,245`, `session.ts:224`), while all eight
+  object-form `where`s key on `token` / `username` / `code` / `role`.
+
+Type surface: **zero public change.** `orm/index.d.ts` is the same byte count
+at both versions and differs only in two chunk-filename hashes; the other seven
+changed `.d.ts` files are pure member reordering or rename. The only one that
+gains content is `capabilities.d.ts`, and it adds exactly the four `private`
+members above. Nothing `bun run typecheck` can see.
+
+Gates: `oxfmt --check` clean, `oxlint --type-aware --max-warnings 0` clean,
+`typecheck` 5/5, `build` 2/2 (both apps prerender `/` → 200).
+
+#### Corrections this audit forced (all pre-existing, none caused by 0.32.2)
+
+The 0.32.1 section's warning that the `dist/` audit "was NOT performed" is
+**only partially retired**. What this audit earns is narrow — `builder.js`,
+`react/index.js`, `server/index.js`, `error.js`, `procedure-caller.js` and
+`cli.mjs` are byte-identical _between 0.32.1 and 0.32.2_ — which says nothing
+about how they changed across 0.27.3 → 0.32.1. Four claims carried forward from
+the 0.27.3 notes turned out to be false at 0.32.x:
+
+- ⚠️ **`resolveIndexOrderPushdown` is NOT byte-identical** — the 2026-08-25
+  "verified unchanged" entry must not be carried forward. It was **rewritten**
+  in the 0.27.3 → 0.32.1 span and moved chunk (`schema.js` →
+  `index-utils.js`): the old body bailed unless `orderSpecs.length === 1`, the
+  new one walks N specs with nullability handling, and `findLeadingIndex` now
+  scores with `servedOrderFieldCount(...)`. The repo is unaffected **only**
+  because every backend `orderBy` is a single field and
+  `end-user-sessions.ts`'s two `eq`s make `index("userId_status")` an _exact_
+  index match, which returns from `scoreIndex` before the order bonus is
+  consulted — all three versions still emit
+  `withIndex('userId_status', q => q.eq('userId',…).eq('status','active')).order('desc').take(200)`.
+  The byte-identity guarantee is gone: **a second `orderBy` field anywhere
+  makes the rewritten logic live and this conclusion must be re-derived.**
+- **`splitFilters`** is byte-identical 0.32.1 → 0.32.2, but across
+  0.27.3 → 0.32.1 it differs by a constant rename (`MAX_PROMOTED_PROBES` →
+  `MAX_INDEX_UNION_PROBES`, value still 64).
+- **`dist/error.js` does not contain the server-side `CRPCError`.** The
+  2026-08-25 notes cite it as guarding the `{ code, message, data? }` envelope;
+  it actually holds only the _client-side_ `CRPCClientError` / `isCRPCError` /
+  `isCRPCErrorCode`. The constructor that shapes the envelope
+  (`super({ ...opts.data ?? {}, code: opts.code, message })`) lives in
+  **`builder.js`**, with `toCRPCError` / `getCRPCErrorFromUnknown`. A future
+  span that left `error.js` alone but changed `builder.js` would slip past the
+  check as written.
+- **`queryKeyHashFn` is not set by this repo.** The 0.27.3 latent-trap note
+  says `convex-provider.tsx` merges it into the QueryClient defaults; grep
+  returns zero hits. It is set _inside kitcn_, by
+  `getConvexQueryClientSingleton`, which `convex-provider.tsx:23` merely calls.
+  The conclusion (the repo is in that path) stands; the attribution was wrong.
+
+Both 0.27.3 latent traps are **still latent and still unfired**: there is no
+`queryFilter` / `invalidateQueries` call site anywhere in the repo, and every
+query key it produces is 3-element.
+
+#### Audit debt still open
+
+The 0.27.3 → 0.32.1 span remains unaudited, and these surfaces **did** change
+in it (all byte-identical 0.32.1 → 0.32.2, so this bump is safe — the gap is
+the carried-forward inventory, not the upgrade):
+
+- **ORM write path.** `.update()` no longer re-reads via `db.get(row._id)`; it
+  derives the post-image in memory, gated on lifecycle hooks / RLS. Reachable
+  at 7 `.update()`, 8 `.insert()` and 3 `.returning()` sites.
+- **`columns:` projection compilation** — ~20 call sites, one security-critical
+  (`session.listByUser` must never project `token`).
+- **`enforceUniqueIndexes` / `enforceForeignKeys`** — backs
+  `invitations.create`'s per-row unique enforcement inside a multi-row
+  `.values([...])`, and `end-user-sessions.ts`'s "FK enforced only when the
+  column is in the write set" saving.
+- **Schema DSL chunks** (`table.js`, `create-schema*.js`), **`runtime.js`**
+  (imported by every committed `*.runtime.ts`), and the **migrations chunk**
+  (the `migrationStatus` mutation→query flip).
+- `findFirst` and `AggregateNoScanWhereArg` — both still on the 0.27.3
+  "verified unchanged" list, neither re-traced at 0.32.x.
+
+⚠️ **Operational precondition inherited from 0.32.1, still unconfirmed:** the
+`migrationStatus` / `aggregateBackfillStatus` mutation→query flip means prod
+must already be running 0.32.1-generated bindings before any
+`kitcn migrate status --prod`. Verify `92fdb47` was deployed before running
+migrate/aggregate subcommands against prod.
+
+Method note for the next audit: the hash-normalization script must only strip a
+`-<8 chars>` suffix when the stripped name is **unique within its directory**
+(otherwise the four root `types-*.d.ts` collapse onto one name and overwrite
+each other — 84 files in, 81 out). It also only _renames_; it never rewrites
+in-file chunk references, so two otherwise-identical files differing solely by
+an import specifier will show as differing. That over-reports rather than
+under-reports, which is the safe direction, but confirm before calling a diff
+real.
+
 ## Pending (audit 2026-07-26)
 
 Snapshot from `bun outdated --filter '*'`. Risk column is a hint, not a
 ceiling — read the changelog before applying anything tagged `high`.
 
-| Package      | Current | Latest | Scope               | Risk    | Notes                                                                                                                                                                                                                                                                                                           |
-| ------------ | ------- | ------ | ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typescript` | 6.0.3   | 7.0.2  | all five workspaces | high    | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1.                                                                                                                      |
-| `turbo`      | 2.10.6  | 2.10.7 | root                | low     | 2.10.7 is on npm `latest` but has no git tag, no GitHub release and no notes; its commits are an in-flight package-graph/discovery rewrite. Revisit once 2.10.8 ships with real notes.                                                                                                                          |
-| `convex`     | 1.44.0  | 1.45.0 | all four workspaces | blocked | Out of kitcn's `>=1.42 <1.45.0` peer, which is still unchanged at 0.32.1. No concrete incompatibility was found in source (audit was at 0.27.3), but bumping trips an unsuppressable kitcn warning on `dev`/`codegen`/`deploy`. Revisit when kitcn's supported convex reaches 1.45.x; see the 2026-08-25 notes. |
+| Package      | Current | Latest  | Scope               | Risk    | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------ | ------- | ------- | ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typescript` | 6.0.3   | 7.0.2   | all five workspaces | high    | TS 7 (native Go port) ships no programmatic compiler API and no `tsserver` until 7.1, silently breaking editors' "use workspace TypeScript version". No CI gate covers it. Revisit at 7.1.                                                                                                                                                                                                                                                                                 |
+| `turbo`      | 2.10.6  | 2.10.12 | root                | low     | Was pending at 2.10.7 (no git tag / release / notes, mid package-graph rewrite); `latest` has since moved to 2.10.12, so the "wait for 2.10.8" condition is met and this is now audit-ready. Not bumped on 2026-09-09 — that pass was scoped to kitcn.                                                                                                                                                                                                                     |
+| `convex`     | 1.44.0  | 1.45.0  | all four workspaces | blocked | Out of kitcn's `>=1.42 <1.45.0` peer, still unchanged at 0.32.2 (`SUPPORTED_CONVEX_VERSION` is still `1.44.0`). Re-verified 2026-09-09: the five subpaths kitcn imports are byte-identical between 1.44.0 and 1.45.0, so there is still no concrete incompatibility — but bumping trips an unsuppressable kitcn warning on `dev`/`codegen`/`deploy`. Also raises `engines.node` to `>=20`. Revisit when kitcn's supported convex reaches 1.45.x; see the 2026-09-09 notes. |
