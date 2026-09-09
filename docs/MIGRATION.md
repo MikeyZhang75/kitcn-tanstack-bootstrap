@@ -27,6 +27,19 @@ This asymmetry bites: `kitcn deploy` pushes your schema to prod by default,
 but `kitcn migrate up` silently runs against **dev** unless you force the
 target.
 
+⚠️ **It bites the other way too.** "Default: dev" holds only while **no
+deployment env var is set**. kitcn forwards `CONVEX_DEPLOYMENT`,
+`CONVEX_DEPLOY_KEY`, `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY`
+from the ambient environment into every `migrate` / `aggregate` subprocess, and
+convex honours a `prod:<name>|<token>` key over the flags
+(`Ignoring --prod … and using deployment from CONVEX_DEPLOY_KEY`). So with a
+prod key exported, `bunx kitcn migrate up --yes` targets **prod** despite the
+missing `--prod`. The env var is the real switch; the flag is not.
+
+That is why every prod example below prefixes the key **inline on the single
+command** rather than `export`-ing it. Keep it that way, and never leave a
+prod `CONVEX_DEPLOY_KEY` exported in a shell you also run dev commands from.
+
 ## When you do NOT need a migration (read this before writing one)
 
 Convex is not SQL. kitcn's own guidance (`packages/backend/node_modules/kitcn/skills/kitcn/references/features/migrations.md`)
@@ -173,7 +186,9 @@ bunx kitcn migrate up --env-file .env.prod --yes
 ```
 
 Drop the flag entirely to target dev — which is what you want while
-developing, and what `bunx kitcn migrate up --yes` does.
+developing, and what `bunx kitcn migrate up --yes` does **provided no
+`CONVEX_DEPLOY_KEY` is exported in that shell** (see the warning above; a prod
+key overrides the missing flag).
 
 ### Step 5: Verify
 
@@ -339,7 +354,8 @@ bunx kitcn migrate down --steps N --env-file .env.prod --yes
 bunx kitcn migrate cancel --env-file .env.prod
 ```
 
-Drop the flag entirely to target dev.
+Drop the flag entirely to target dev — again, only if no `CONVEX_DEPLOY_KEY`
+is exported in that shell.
 
 ## WARNING
 
@@ -350,6 +366,11 @@ Drop the flag entirely to target dev.
   or `--env-file .env.prod` (self-hosted) to `kitcn migrate` when targeting
   production. Forgetting the target is the #1 migration footgun in this
   repo.
+- **NEVER leave a prod `CONVEX_DEPLOY_KEY` exported in a shell you also run
+  dev commands from.** kitcn forwards it into every `migrate` / `aggregate`
+  subprocess and convex honours it over the flags, so omitting `--prod` does
+  **not** keep you in dev — it just hides which deployment you hit. Prefix
+  the key inline on the one command that needs it.
 - Deploys read the working tree, not HEAD. Commit before `bunx kitcn deploy`
   if you want git and prod to match.
 - **After bumping `kitcn`, run `bun run codegen` before any migrate/deploy.**

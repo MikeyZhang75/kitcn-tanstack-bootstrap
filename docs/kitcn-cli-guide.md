@@ -16,10 +16,26 @@ self-hosted, pass `--env-file .env.prod` instead.
 | Command                         | Default target | Force prod (cloud)                        | Force prod (self-hosted) |
 | ------------------------------- | -------------- | ----------------------------------------- | ------------------------ |
 | `bunx kitcn deploy`             | **prod**       | (default; ambient `CONVEX_DEPLOY_KEY` OK) | `--env-file .env.prod`   |
-| `bunx kitcn migrate <subcmd>`   | dev            | `--prod` + ambient `CONVEX_DEPLOY_KEY`    | `--env-file .env.prod`   |
-| `bunx kitcn aggregate <subcmd>` | dev            | `--prod` + ambient `CONVEX_DEPLOY_KEY`    | `--env-file .env.prod`   |
+| `bunx kitcn migrate <subcmd>`   | dev †          | `--prod` + ambient `CONVEX_DEPLOY_KEY`    | `--env-file .env.prod`   |
+| `bunx kitcn aggregate <subcmd>` | dev †          | `--prod` + ambient `CONVEX_DEPLOY_KEY`    | `--env-file .env.prod`   |
 | `bunx kitcn codegen`            | dev            | n/a                                       | n/a                      |
 | `bunx kitcn dev`                | dev            | n/a                                       | n/a                      |
+
+† ⚠️ **"dev" here means "dev _when no deployment env var is set_", not "dev
+unless you pass `--prod`".** kitcn copies all four of `CONVEX_DEPLOYMENT`,
+`CONVEX_DEPLOY_KEY`, `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY`
+out of `process.env` (`getConvexDeploymentCommandEnv`, `cli.mjs:10485`) and
+forwards them to the spawned convex command — for `migrate` and `aggregate`
+alike, not just `deploy`. convex then matches a `prod:<name>|<token>` value as
+an existing deployment and prints
+`Ignoring --prod, --preview-name, or --deployment-name flags and using deployment from CONVEX_DEPLOY_KEY`.
+
+So `CONVEX_DEPLOY_KEY='prod:…' bunx kitcn migrate up` hits **prod** even though
+`--prod` was never passed, and `--prod` is not what selects the target — the
+env var is. Treat "is a prod key exported in this shell?" as the real control,
+and scope the export to the one command you mean it for (prefix it inline,
+as every example in [`MIGRATION.md`](MIGRATION.md) does) rather than
+`export`-ing it for the session.
 
 ## Aggregate commands
 
